@@ -11,7 +11,7 @@ public class Constants {
 			"gallbladder", "kidney", "liver", "lung", "melanoma", "ovary", "pancreas", "pnet", "prostate", "stomach",
 			"uterus" };
 	
-	static final String[] TUMOR_TYPES = { "cervix" };
+	static final String[] TUMOR_TYPES = { "bone" };
 
 	static final String WORKING_ICGC_DIR = WORKING_DIR + "icgc-datasets\\";
 	static final String ICGC_SAMPLE_ID = "icgc_sample_id";
