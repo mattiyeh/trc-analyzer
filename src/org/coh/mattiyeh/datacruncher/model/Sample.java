@@ -127,27 +127,27 @@ public class Sample {
 	}
 
 	public Set<Mutation> getPromoterMutationsInExpressedGenes(double cutoff, Operator op, Sample expressionSample) {
-		Set<Mutation> promoterMutationsInHighlyExpressedGenes = new HashSet<>();
+		Set<Mutation> promoterMutationsInExpressedGenes = new HashSet<>();
 
 		// All gene IDs in this sample we have expression data for
 		Set<String> geneIds = expressionSample.getGeneNormExpressionLevels().keySet();
 		for (String geneId : geneIds) {
-			// Is gene highly expressed?
+			// Is gene highly expressed? ... or whatever the operator calls for
 			if (op.apply(expressionSample.getGeneNormExpressionLevelLog(geneId), cutoff)) {
 
 				// Is there a promoter mutation for this gene?
 				for (Mutation mutation : getMutationsForGene(geneId)) {
 					if (mutation.isInPromoterRegion()) {
-						promoterMutationsInHighlyExpressedGenes.add(mutation);
+						promoterMutationsInExpressedGenes.add(mutation);
 					}
 				}
 			}
 		}
 
-		return promoterMutationsInHighlyExpressedGenes;
+		return promoterMutationsInExpressedGenes;
 	}
 
-	public int getNumPromoterMutationsInHighlyExpressedGenes(double cutoff, Operator op, Sample expressionSample) {
+	public int getNumPromoterMutationsInExpressedGenes(double cutoff, Operator op, Sample expressionSample) {
 		return getPromoterMutationsInExpressedGenes(cutoff, op, expressionSample).size();
 	}
 

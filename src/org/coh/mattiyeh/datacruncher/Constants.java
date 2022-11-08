@@ -2,8 +2,8 @@ package org.coh.mattiyeh.datacruncher;
 
 public class Constants {
 
-	static final String WORKING_DIR = "C:\\Users\\" + ("CONTRA".equals(Launcher.hostname) ? "marca" : "attiyehm")
-			+ "\\My Drive\\City of Hope\\Projects\\TRC signatures\\";
+	static final String WORKING_DIR = "C:\\Users\\" + ("CONTRA".equals(Launcher.hostname) ? "marca\\Google " : "attiyehm\\My ")
+			+ "Drive\\City of Hope\\Projects\\TRC signatures\\";
 	
 	static final String DATA_FILES_DIR = WORKING_DIR + "data_files\\";
 

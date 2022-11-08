@@ -3,6 +3,7 @@ package org.coh.mattiyeh.datacruncher.model;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.apache.commons.lang3.StringUtils;
 import org.coh.mattiyeh.datacruncher.genome.TriSeq;
@@ -191,27 +192,7 @@ public class Mutation implements Serializable {
 
 	@Override
 	public int hashCode() {
-		final int prime = 31;
-		int result = 1;
-		result = prime * result + ((chr == null) ? 0 : chr.hashCode());
-		result = prime * result + ((donorId == null) ? 0 : donorId.hashCode());
-		result = prime * result + end;
-		result = prime * result + (inCfsRegion ? 1231 : 1237);
-		result = prime * result + (inPromoterRegion ? 1231 : 1237);
-		result = prime * result + ((matchedSampleId == null) ? 0 : matchedSampleId.hashCode());
-		result = prime * result + ((mutBase == null) ? 0 : mutBase.hashCode());
-		result = prime * result + mutantAlleleReadCount;
-		result = prime * result + ((mutationEffects == null) ? 0 : mutationEffects.hashCode());
-		result = prime * result + ((mutationId == null) ? 0 : mutationId.hashCode());
-		result = prime * result + ((rawLines == null) ? 0 : rawLines.hashCode());
-		result = prime * result + ((refBase == null) ? 0 : refBase.hashCode());
-		result = prime * result + ((sampleId == null) ? 0 : sampleId.hashCode());
-		result = prime * result + ((sequencingStrategy == null) ? 0 : sequencingStrategy.hashCode());
-		result = prime * result + ((specimenId == null) ? 0 : specimenId.hashCode());
-		result = prime * result + start;
-		result = prime * result + totalReadCount;
-		result = prime * result + ((triSeq == null) ? 0 : triSeq.hashCode());
-		return result;
+		return Objects.hash(mutationId);
 	}
 
 	@Override
@@ -223,79 +204,26 @@ public class Mutation implements Serializable {
 		if (getClass() != obj.getClass())
 			return false;
 		Mutation other = (Mutation) obj;
-		if (chr == null) {
-			if (other.chr != null)
-				return false;
-		} else if (!chr.equals(other.chr))
-			return false;
-		if (donorId == null) {
-			if (other.donorId != null)
-				return false;
-		} else if (!donorId.equals(other.donorId))
-			return false;
-		if (end != other.end)
-			return false;
-		if (inCfsRegion != other.inCfsRegion)
-			return false;
-		if (inPromoterRegion != other.inPromoterRegion)
-			return false;
-		if (matchedSampleId == null) {
-			if (other.matchedSampleId != null)
-				return false;
-		} else if (!matchedSampleId.equals(other.matchedSampleId))
-			return false;
-		if (mutBase == null) {
-			if (other.mutBase != null)
-				return false;
-		} else if (!mutBase.equals(other.mutBase))
-			return false;
-		if (mutantAlleleReadCount != other.mutantAlleleReadCount)
-			return false;
-		if (mutationEffects == null) {
-			if (other.mutationEffects != null)
-				return false;
-		} else if (!mutationEffects.equals(other.mutationEffects))
-			return false;
-		if (mutationId == null) {
-			if (other.mutationId != null)
-				return false;
-		} else if (!mutationId.equals(other.mutationId))
-			return false;
-		if (rawLines == null) {
-			if (other.rawLines != null)
-				return false;
-		} else if (!rawLines.equals(other.rawLines))
-			return false;
-		if (refBase == null) {
-			if (other.refBase != null)
-				return false;
-		} else if (!refBase.equals(other.refBase))
-			return false;
-		if (sampleId == null) {
-			if (other.sampleId != null)
-				return false;
-		} else if (!sampleId.equals(other.sampleId))
-			return false;
-		if (sequencingStrategy == null) {
-			if (other.sequencingStrategy != null)
-				return false;
-		} else if (!sequencingStrategy.equals(other.sequencingStrategy))
-			return false;
-		if (specimenId == null) {
-			if (other.specimenId != null)
-				return false;
-		} else if (!specimenId.equals(other.specimenId))
-			return false;
-		if (start != other.start)
-			return false;
-		if (totalReadCount != other.totalReadCount)
-			return false;
-		if (triSeq == null) {
-			if (other.triSeq != null)
-				return false;
-		} else if (!triSeq.equals(other.triSeq))
-			return false;
-		return true;
+		return Objects.equals(mutationId, other.mutationId);
+	}
+
+	@Override
+	public String toString() {
+		StringBuilder builder = new StringBuilder();
+		builder.append("Mutation [mutationId=");
+		builder.append(mutationId);
+		builder.append(", chr=");
+		builder.append(chr);
+		builder.append(", start=");
+		builder.append(start);
+		builder.append(", end=");
+		builder.append(end);
+		builder.append(", refBase=");
+		builder.append(refBase);
+		builder.append(", mutBase=");
+		builder.append(mutBase);
+		builder.append("]");
+		return builder.toString();
 	}
 
 }

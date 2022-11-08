@@ -85,7 +85,7 @@ public class DataCruncher {
 			readExpressionLevels(tumorTypeDir, donors);
 
 			System.out.println("Crunching numbers...");
-			crunchNumbers(tumorTypeDir, outputTimestampFolderPath, donors);
+			crunchNumbers(tumorType, tumorTypeDir, outputTimestampFolderPath, donors);
 
 			System.out.println();
 		}
@@ -352,25 +352,27 @@ public class DataCruncher {
 
 	}
 
-	private void crunchNumbers(String tumorTypeDir, Path outputTimestampFolderPath, Map<String, Donor> donors)
+	private void crunchNumbers(String tumorType, String tumorTypeDir, Path outputTimestampFolderPath, Map<String, Donor> donors)
 			throws IOException {
 
 		final int highCutoff = 75;
 		final int lowCutoff = 25;
 		final int zeroCutoff = 0;
-
-		Path histogramPath = outputTimestampFolderPath.resolve("histogram.tsv");
-		Path promoterMutationPath = outputTimestampFolderPath.resolve("promoter_mutations_new.tsv");
-		Path promoterMutationHighPath = outputTimestampFolderPath.resolve("promoter_mutations_high_new.tsv");
-		Path promoterMutationMidPath = outputTimestampFolderPath.resolve("promoter_mutations_mid_new.tsv");
-		Path promoterMutationLowPath = outputTimestampFolderPath.resolve("promoter_mutations_low_new.tsv");
-		Path promoterMutationZeroPath = outputTimestampFolderPath.resolve("promoter_mutations_zero_new.tsv");
-		Path nonPromoterMutationPath = outputTimestampFolderPath.resolve("non_promoter_mutations_new.tsv");
-		Path cfsMutationsPath = outputTimestampFolderPath.resolve("cfs_mutations_new.tsv");
+		
+		Path histogramPath = outputTimestampFolderPath.resolve(tumorType + "_histogram.tsv");
+		Path promoterMutationPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations.tsv");
+		Path promoterMutationHighPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_high.tsv");
+		Path promoterMutationHighUniquePath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_unique_high.tsv");
+		Path promoterMutationMidPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_mid.tsv");
+		Path promoterMutationLowPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_low.tsv");
+		Path promoterMutationZeroPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_zero.tsv");
+		Path nonPromoterMutationPath = outputTimestampFolderPath.resolve(tumorType + "_non_promoter_mutations.tsv");
+		Path cfsMutationsPath = outputTimestampFolderPath.resolve(tumorType + "_cfs_mutations.tsv");
 		Files.createFile(histogramPath);
 		try (BufferedWriter histogramBw = Files.newBufferedWriter(histogramPath);
 				BufferedWriter promMutsBw = Files.newBufferedWriter(promoterMutationPath);
 				BufferedWriter promMutsHighBw = Files.newBufferedWriter(promoterMutationHighPath);
+				BufferedWriter promMutsHighUniBw = Files.newBufferedWriter(promoterMutationHighUniquePath);
 				BufferedWriter promMutsMidBw = Files.newBufferedWriter(promoterMutationMidPath);
 				BufferedWriter promMutsLowBw = Files.newBufferedWriter(promoterMutationLowPath);
 				BufferedWriter promMutsZeroBw = Files.newBufferedWriter(promoterMutationZeroPath);
@@ -396,6 +398,8 @@ public class DataCruncher {
 			promMutsBw.newLine();
 			promMutsHighBw.write(header);
 			promMutsHighBw.newLine();
+			promMutsHighUniBw.write(header);
+			promMutsHighUniBw.newLine();
 			promMutsMidBw.write(header);
 			promMutsMidBw.newLine();
 			promMutsLowBw.write(header);
@@ -460,6 +464,8 @@ public class DataCruncher {
 				}
 
 				for (Mutation promoterMutationInHighlyExpressedGene : promoterMutationsInHighExpressedGenes) {
+					promMutsHighUniBw.write(promoterMutationInHighlyExpressedGene.getRawLines().get(0));
+					promMutsHighUniBw.newLine();
 					for (String line : promoterMutationInHighlyExpressedGene.getRawLines()) {
 						promMutsHighBw.write(line + "\t" + promoterMutationInHighlyExpressedGene.getTriSeqWithMut());
 						promMutsHighBw.newLine();

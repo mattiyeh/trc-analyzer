@@ -275,10 +275,9 @@ public class Donor {
 		}
 
 		return promoterMutationsInExpressedGenes;
-
 	}
 
-	public int getNumPromoterMutationsInHighlyExpressedGenes(int nthPercentile, Operator op) {
+	public int getNumPromoterMutationsInExpressedGenes(int nthPercentile, Operator op) {
 		return getPromoterMutationsInExpressedGenes(nthPercentile, op).size();
 	}
 
