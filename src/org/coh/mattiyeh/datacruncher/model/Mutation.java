@@ -8,7 +8,7 @@ import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
 import org.coh.mattiyeh.datacruncher.genome.TriSeq;
 
-public class Mutation implements Serializable {
+public class Mutation implements Serializable, Comparable<Mutation> {
 
 	/**
 	 * 
@@ -224,6 +224,11 @@ public class Mutation implements Serializable {
 		builder.append(mutBase);
 		builder.append("]");
 		return builder.toString();
+	}
+
+	@Override
+	public int compareTo(Mutation o) {
+		return this.mutationId.compareTo(o.getMutationId());
 	}
 
 }

@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.apache.commons.collections4.MapUtils;
 import org.coh.mattiyeh.datacruncher.math.Functions;
@@ -78,8 +79,8 @@ public class Sample {
 		return mutations.size();
 	}
 
-	public List<Mutation> getPromoterMutations() {
-		List<Mutation> promoterMutations = new ArrayList<>();
+	public Set<Mutation> getPromoterMutations() {
+		Set<Mutation> promoterMutations = new TreeSet<>();
 
 		mutations.forEach((mutationId, mutation) -> {
 			if (mutation.isInPromoterRegion()) {
@@ -94,8 +95,8 @@ public class Sample {
 		return getPromoterMutations().size();
 	}
 
-	public List<Mutation> getNonPromoterMutations() {
-		List<Mutation> nonPromoterMutations = new ArrayList<>();
+	public Set<Mutation> getNonPromoterMutations() {
+		Set<Mutation> nonPromoterMutations = new TreeSet<>();
 
 		mutations.forEach((mutationId, mutation) -> {
 			if (!mutation.isInPromoterRegion()) {
@@ -110,8 +111,8 @@ public class Sample {
 		return getNonPromoterMutations().size();
 	}
 
-	public List<Mutation> getCfsMutations() {
-		List<Mutation> cfsMutations = new ArrayList<>();
+	public Set<Mutation> getCfsMutations() {
+		Set<Mutation> cfsMutations = new TreeSet<>();
 
 		mutations.forEach((mutationId, mutation) -> {
 			if (mutation.isInCfsRegion()) {
@@ -127,7 +128,7 @@ public class Sample {
 	}
 
 	public Set<Mutation> getPromoterMutationsInExpressedGenes(double cutoff, Operator op, Sample expressionSample) {
-		Set<Mutation> promoterMutationsInExpressedGenes = new HashSet<>();
+		Set<Mutation> promoterMutationsInExpressedGenes = new TreeSet<>();
 
 		// All gene IDs in this sample we have expression data for
 		Set<String> geneIds = expressionSample.getGeneNormExpressionLevels().keySet();

@@ -1,11 +1,9 @@
 package org.coh.mattiyeh.datacruncher.model;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.coh.mattiyeh.datacruncher.math.Operator;
 
@@ -221,8 +219,8 @@ public class Donor {
 		return getMutations().size();
 	}
 
-	public List<Mutation> getPromoterMutations() {
-		List<Mutation> promoterMutations = new ArrayList<>();
+	public Set<Mutation> getPromoterMutations() {
+		Set<Mutation> promoterMutations = new TreeSet<>();
 
 		Specimen specimen = findSpecimenWithMutationAndExpressionData();
 		if (specimen != null) {
@@ -236,8 +234,8 @@ public class Donor {
 		return getPromoterMutations().size();
 	}
 	
-	public List<Mutation> getNonPromoterMutations() {
-		List<Mutation> nonPromoterMutations = new ArrayList<>();
+	public Set<Mutation> getNonPromoterMutations() {
+		Set<Mutation> nonPromoterMutations = new TreeSet<>();
 
 		Specimen specimen = findSpecimenWithMutationAndExpressionData();
 		if (specimen != null) {
@@ -251,8 +249,8 @@ public class Donor {
 		return getNonPromoterMutations().size();
 	}
 	
-	public List<Mutation> getCfsMutations() {
-		List<Mutation> cfsMutations = new ArrayList<>();
+	public Set<Mutation> getCfsMutations() {
+		Set<Mutation> cfsMutations = new TreeSet<>();
 
 		Specimen specimen = findSpecimenWithMutationAndExpressionData();
 		if (specimen != null) {
@@ -267,7 +265,7 @@ public class Donor {
 	}
 
 	public Set<Mutation> getPromoterMutationsInExpressedGenes(int nthPercentile, Operator op) {
-		Set<Mutation> promoterMutationsInExpressedGenes = new HashSet<>();
+		Set<Mutation> promoterMutationsInExpressedGenes = new TreeSet<>();
 
 		Specimen specimen = findSpecimenWithMutationAndExpressionData();
 		if (specimen != null) {

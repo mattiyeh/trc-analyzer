@@ -1,11 +1,9 @@
 package org.coh.mattiyeh.datacruncher.model;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 import org.coh.mattiyeh.datacruncher.math.Operator;
 import org.coh.mattiyeh.datacruncher.math.PercentileUtil;
@@ -127,8 +125,8 @@ public class Specimen {
 		return getMutations().size();
 	}
 
-	public List<Mutation> getPromoterMutations() {
-		List<Mutation> promoterMutations = new ArrayList<>();
+	public Set<Mutation> getPromoterMutations() {
+		Set<Mutation> promoterMutations = new TreeSet<>();
 
 		Sample mutationSample = getMutationSample();
 		if (mutationSample != null) {
@@ -142,8 +140,8 @@ public class Specimen {
 		return getPromoterMutations().size();
 	}
 	
-	public List<Mutation> getNonPromoterMutations() {
-		List<Mutation> nonPromoterMutations = new ArrayList<>();
+	public Set<Mutation> getNonPromoterMutations() {
+		Set<Mutation> nonPromoterMutations = new TreeSet<>();
 
 		Sample mutationSample = getMutationSample();
 		if (mutationSample != null) {
@@ -157,8 +155,8 @@ public class Specimen {
 		return getNonPromoterMutations().size();
 	}
 
-	public List<Mutation> getCfsMutations() {
-		List<Mutation> cfsMutations = new ArrayList<>();
+	public Set<Mutation> getCfsMutations() {
+		Set<Mutation> cfsMutations = new TreeSet<>();
 
 		Sample mutationSample = getMutationSample();
 		if (mutationSample != null) {
@@ -173,7 +171,7 @@ public class Specimen {
 	}
 
 	public Set<Mutation> getPromoterMutationsInExpressedGenes(int nthPercentile, Operator op) {
-		Set<Mutation> promoterMutationsInExpressedGenes = new HashSet<>();
+		Set<Mutation> promoterMutationsInExpressedGenes = new TreeSet<>();
 
 		// Internal check to make sure at least one sample has mutation data and one
 		// sample has expression data (it may be the same sample!)

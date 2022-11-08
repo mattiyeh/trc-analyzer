@@ -361,23 +361,42 @@ public class DataCruncher {
 		
 		Path histogramPath = outputTimestampFolderPath.resolve(tumorType + "_histogram.tsv");
 		Path promoterMutationPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations.tsv");
+		Path promoterMutationUniquePath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_unique.tsv");
+		
 		Path promoterMutationHighPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_high.tsv");
 		Path promoterMutationHighUniquePath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_unique_high.tsv");
+		
 		Path promoterMutationMidPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_mid.tsv");
+		Path promoterMutationMidUniquePath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_unique_mid.tsv");
+		
 		Path promoterMutationLowPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_low.tsv");
+		Path promoterMutationLowUniquePath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_unique_low.tsv");
+		
 		Path promoterMutationZeroPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_zero.tsv");
+		Path promoterMutationZeroUniquePath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_unique_zero.tsv");
+		
 		Path nonPromoterMutationPath = outputTimestampFolderPath.resolve(tumorType + "_non_promoter_mutations.tsv");
+		Path nonPromoterMutationUniquePath = outputTimestampFolderPath.resolve(tumorType + "_non_promoter_mutations_unique.tsv");
+		
 		Path cfsMutationsPath = outputTimestampFolderPath.resolve(tumorType + "_cfs_mutations.tsv");
+		Path cfsMutationsUniquePath = outputTimestampFolderPath.resolve(tumorType + "_cfs_mutations_unique.tsv");
+		
 		Files.createFile(histogramPath);
 		try (BufferedWriter histogramBw = Files.newBufferedWriter(histogramPath);
 				BufferedWriter promMutsBw = Files.newBufferedWriter(promoterMutationPath);
+				BufferedWriter promMutsUniBw = Files.newBufferedWriter(promoterMutationUniquePath);
 				BufferedWriter promMutsHighBw = Files.newBufferedWriter(promoterMutationHighPath);
 				BufferedWriter promMutsHighUniBw = Files.newBufferedWriter(promoterMutationHighUniquePath);
 				BufferedWriter promMutsMidBw = Files.newBufferedWriter(promoterMutationMidPath);
+				BufferedWriter promMutsMidUniBw = Files.newBufferedWriter(promoterMutationMidUniquePath);
 				BufferedWriter promMutsLowBw = Files.newBufferedWriter(promoterMutationLowPath);
+				BufferedWriter promMutsLowUniBw = Files.newBufferedWriter(promoterMutationLowUniquePath);
 				BufferedWriter promMutsZeroBw = Files.newBufferedWriter(promoterMutationZeroPath);
+				BufferedWriter promMutsZeroUniBw = Files.newBufferedWriter(promoterMutationZeroUniquePath);
 				BufferedWriter nonPromMutsBw = Files.newBufferedWriter(nonPromoterMutationPath);
-				BufferedWriter cfsMutsBw = Files.newBufferedWriter(cfsMutationsPath)) {
+				BufferedWriter nonPromMutsUniBw = Files.newBufferedWriter(nonPromoterMutationUniquePath);
+				BufferedWriter cfsMutsBw = Files.newBufferedWriter(cfsMutationsPath);
+				BufferedWriter cfsMutsUniBw = Files.newBufferedWriter(cfsMutationsUniquePath)) {
 
 			histogramBw.write(
 					"donorId" + "\t" + "Num specimens" + "\t" + "Num samples" + "\t" + "Num specimens with mutation"
@@ -410,6 +429,8 @@ public class DataCruncher {
 			nonPromMutsBw.newLine();
 			cfsMutsBw.write(header);
 			cfsMutsBw.newLine();
+			cfsMutsUniBw.write(header);
+			cfsMutsUniBw.newLine();
 
 			for (Map.Entry<String, Donor> entry : donors.entrySet()) {
 				String donorId = entry.getKey();
@@ -429,8 +450,8 @@ public class DataCruncher {
 				histogramBw.write("\t" + donor.getNumSpecimensWithBoth());
 
 				Map<String, Mutation> mutations = donor.getMutations();
-				List<Mutation> promoterMutations = donor.getPromoterMutations();
-				List<Mutation> nonPromoterMutations = donor.getNonPromoterMutations();
+				Set<Mutation> promoterMutations = donor.getPromoterMutations();
+				Set<Mutation> nonPromoterMutations = donor.getNonPromoterMutations();
 
 				// Get promoter mutations in high expressed genes (highCutoff <= HERE)
 				Set<Mutation> promoterMutationsInHighExpressedGenes = donor.getPromoterMutationsInExpressedGenes(highCutoff, Operator.GREATERTHANOREQUAL);
@@ -445,7 +466,7 @@ public class DataCruncher {
 				// Get promoter mutations in NON-expressed genes (HERE <= zeroCutoff)
 				Set<Mutation> promoterMutationsInZeroExpressedGenes = donor.getPromoterMutationsInExpressedGenes(zeroCutoff, Operator.LESSTHANOREQUAL);
 				
-				List<Mutation> cfsMutations = donor.getCfsMutations();
+				Set<Mutation> cfsMutations = donor.getCfsMutations();
 
 				histogramBw.write("\t" + mutations.size());
 				histogramBw.write("\t" + promoterMutations.size());
@@ -456,56 +477,34 @@ public class DataCruncher {
 				histogramBw.write("\t" + cfsMutations.size());
 				histogramBw.newLine();
 
-				for (Mutation promoterMutation : promoterMutations) {
-					for (String line : promoterMutation.getRawLines()) {
-						promMutsBw.write(line + "\t" + promoterMutation.getTriSeqWithMut());
-						promMutsBw.newLine();
-					}
-				}
+				writeMutationsToFiles(promoterMutations, promMutsBw, promMutsUniBw);
 
-				for (Mutation promoterMutationInHighlyExpressedGene : promoterMutationsInHighExpressedGenes) {
-					promMutsHighUniBw.write(promoterMutationInHighlyExpressedGene.getRawLines().get(0));
-					promMutsHighUniBw.newLine();
-					for (String line : promoterMutationInHighlyExpressedGene.getRawLines()) {
-						promMutsHighBw.write(line + "\t" + promoterMutationInHighlyExpressedGene.getTriSeqWithMut());
-						promMutsHighBw.newLine();
-					}
-				}
+				writeMutationsToFiles(promoterMutationsInHighExpressedGenes, promMutsHighBw, promMutsHighUniBw);
+				
+				writeMutationsToFiles(promoterMutationsInMidExpressedGenes, promMutsMidBw, promMutsMidUniBw);
+				
+				writeMutationsToFiles(promoterMutationsInLowExpressedGenes, promMutsLowBw, promMutsLowUniBw);
+				
+				writeMutationsToFiles(promoterMutationsInZeroExpressedGenes, promMutsZeroBw, promMutsZeroUniBw);
+				
+				writeMutationsToFiles(nonPromoterMutations, nonPromMutsBw, nonPromMutsUniBw);
+				
+				writeMutationsToFiles(cfsMutations, cfsMutsBw, cfsMutsUniBw);
 
-				for (Mutation promoterMutationInMidExpressedGene : promoterMutationsInMidExpressedGenes) {
-					for (String line : promoterMutationInMidExpressedGene.getRawLines()) {
-						promMutsMidBw.write(line + "\t" + promoterMutationInMidExpressedGene.getTriSeqWithMut());
-						promMutsMidBw.newLine();
-					}
-				}
+			}
+		}
+	}
 
-				for (Mutation promoterMutationInLowExpressedGene : promoterMutationsInLowExpressedGenes) {
-					for (String line : promoterMutationInLowExpressedGene.getRawLines()) {
-						promMutsLowBw.write(line + "\t" + promoterMutationInLowExpressedGene.getTriSeqWithMut());
-						promMutsLowBw.newLine();
-					}
-				}
-
-				for (Mutation promoterMutationInZeroExpressedGene : promoterMutationsInZeroExpressedGenes) {
-					for (String line : promoterMutationInZeroExpressedGene.getRawLines()) {
-						promMutsZeroBw.write(line + "\t" + promoterMutationInZeroExpressedGene.getTriSeqWithMut());
-						promMutsZeroBw.newLine();
-					}
-				}
-
-				for (Mutation nonPromoterMutation : nonPromoterMutations) {
-					for (String line : nonPromoterMutation.getRawLines()) {
-						nonPromMutsBw.write(line + "\t" + nonPromoterMutation.getTriSeqWithMut());
-						nonPromMutsBw.newLine();
-					}
-				}
-
-				for (Mutation cfsMutation : cfsMutations) {
-					for (String line : cfsMutation.getRawLines()) {
-						cfsMutsBw.write(line + "\t" + cfsMutation.getTriSeqWithMut());
-						cfsMutsBw.newLine();
-					}
-				}
+	private void writeMutationsToFiles(Set<Mutation> promoterMutations, BufferedWriter allWriter, BufferedWriter uniqueWriter)
+			throws IOException {
+		for (Mutation mutation : promoterMutations) {
+			String str = mutation.getRawLines().get(0);
+			String triSeqWithMut = mutation.getTriSeqWithMut();
+			uniqueWriter.write(str + "\t" + triSeqWithMut);
+			uniqueWriter.newLine();
+			for (String line : mutation.getRawLines()) {
+				allWriter.write(line + "\t" + triSeqWithMut);
+				allWriter.newLine();
 			}
 		}
 	}
