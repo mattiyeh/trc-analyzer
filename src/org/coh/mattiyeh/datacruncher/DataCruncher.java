@@ -70,7 +70,7 @@ public class DataCruncher {
 
 			System.out.println("Starting " + tumorType);
 
-			Path outputTimestampFolderPath = Paths.get(Constants.OUTPUT_DIR, "DataCruncherOutput__" + timestamp + "_" + tumorType);
+			Path outputTimestampFolderPath = Paths.get(Constants.OUTPUT_DIR + "__" + timestamp, "DCO__" + timestamp + "_" + tumorType);
 			Files.createDirectories(outputTimestampFolderPath);
 
 			System.out.println("Reading donors...");

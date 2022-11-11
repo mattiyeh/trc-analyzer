@@ -6,7 +6,7 @@ public class Constants {
 			+ "Drive\\City of Hope\\Projects\\TRC signatures\\";
 	
 	static final String DATA_FILES_DIR = WORKING_DIR + "data_files\\";
-	static final String OUTPUT_DIR = WORKING_DIR + "icgc-datasets-outputs\\";
+	static final String OUTPUT_DIR = WORKING_DIR + "icgc-datasets-outputs";
 	
 	static final String DONORS_FILENAME = "donor.tsv.gz";
 	static final String SPECIMENS_FILENAME = "specimen.tsv.gz";
