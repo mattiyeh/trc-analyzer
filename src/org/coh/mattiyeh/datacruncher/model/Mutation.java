@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Objects;
 
 import org.apache.commons.lang3.StringUtils;
+import org.coh.mattiyeh.datacruncher.Constants;
 import org.coh.mattiyeh.datacruncher.genome.TriSeq;
 
 public class Mutation implements Serializable, Comparable<Mutation> {
@@ -20,6 +21,7 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 	private String specimenId;
 	private String sampleId;
 	private String matchedSampleId;
+	private MutationType type;
 	private String chr;
 	private int start;
 	private int end;
@@ -38,16 +40,16 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 	private List<String> rawLines;
 
 	public Mutation(String mutationId, String donorId, String specimenId, String sampleId, String matchedSampleId,
-			String chr, int start, int end, String refBase, String mutBase, int totalReadCount,
+			String type, String chr, int start, int end, String refBase, String mutBase, int totalReadCount,
 			int mutantAlleleReadCount, String sequencingStrategy, String consequenceType, String geneAffected) {
-		
-		this(mutationId, donorId, specimenId, sampleId, matchedSampleId, chr, start, end, refBase, mutBase,
+
+		this(mutationId, donorId, specimenId, sampleId, matchedSampleId, type, chr, start, end, refBase, mutBase,
 				totalReadCount, mutantAlleleReadCount, sequencingStrategy, consequenceType, geneAffected,
 				new ArrayList<>());
 	}
 
 	public Mutation(String mutationId, String donorId, String specimenId, String sampleId, String matchedSampleId,
-			String chr, int start, int end, String refBase, String mutBase, int totalReadCount,
+			String type, String chr, int start, int end, String refBase, String mutBase, int totalReadCount,
 			int mutantAlleleReadCount, String sequencingStrategy, String consequenceType, String geneAffected,
 			List<String> rawLines) {
 		super();
@@ -56,6 +58,17 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 		this.specimenId = specimenId;
 		this.sampleId = sampleId;
 		this.matchedSampleId = matchedSampleId;
+
+		if (Constants.SBS.equals(type)) {
+			this.type = MutationType.SBS;
+		} else if (Constants.INSERTION.equals(type)) {
+			this.type = MutationType.INSERTION;
+		} else if (Constants.DELETION.equals(type)) {
+			this.type = MutationType.DELETION;
+		} else if (Constants.MBS.equals(type)) {
+			this.type = MutationType.MBS;
+		}
+
 		this.chr = chr;
 		this.start = start;
 		this.end = end;
@@ -92,6 +105,10 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 
 	public String getMatchedSampleId() {
 		return matchedSampleId;
+	}
+
+	public MutationType getType() {
+		return type;
 	}
 
 	public TriSeq getTriSeq() {

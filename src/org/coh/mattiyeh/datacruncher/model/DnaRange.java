@@ -25,7 +25,7 @@ public class DnaRange {
 		return end;
 	}
 
-	public boolean isInRange(int mutStart, int mutEnd) {
+	public boolean overlaps(int mutStart, int mutEnd) {
 		return isInRange(mutStart) || isInRange(mutEnd);
 	}
 
@@ -35,7 +35,7 @@ public class DnaRange {
 
 	@Override
 	public String toString() {
-		return "PromoterRegion [chr=" + chr + ", start=" + start + ", end=" + end + "]";
+		return "DnaRange [chr=" + chr + ", start=" + start + ", end=" + end + "]";
 	}
 
 }

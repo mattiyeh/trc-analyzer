@@ -25,6 +25,12 @@ public enum Operator {
 		public boolean apply(double x1, double x2) {
 			return x1 > x2;
 		}
+	},
+	EQUALTO() {
+		@Override
+		public boolean apply(double x1, double x2) {
+			return x1 == x2;
+		}
 	};
 
 	public abstract boolean apply(double x1, double x2);

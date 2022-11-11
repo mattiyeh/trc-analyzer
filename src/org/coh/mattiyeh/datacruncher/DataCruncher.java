@@ -36,6 +36,8 @@ import org.coh.mattiyeh.datacruncher.model.Donor;
 import org.coh.mattiyeh.datacruncher.model.Gene;
 import org.coh.mattiyeh.datacruncher.model.GeneNaming;
 import org.coh.mattiyeh.datacruncher.model.Mutation;
+import org.coh.mattiyeh.datacruncher.model.MutationRange;
+import org.coh.mattiyeh.datacruncher.model.MutationType;
 import org.coh.mattiyeh.datacruncher.model.Sample;
 import org.coh.mattiyeh.datacruncher.model.Specimen;
 
@@ -96,7 +98,7 @@ public class DataCruncher {
 		Map<String, Donor> donors = new HashMap<>();
 
 		Path icgcDir = Paths.get(Constants.WORKING_ICGC_DIR);
-		File donorsFile = icgcDir.resolve(tumorType).resolve("donor.tsv.gz").toFile();
+		File donorsFile = icgcDir.resolve(tumorType).resolve(Constants.DONORS_FILENAME).toFile();
 
 		Iterable<CSVRecord> records = CSVFormat.TDF.builder().setHeader().build()
 				.parse(new InputStreamReader(new GZIPInputStream(new FileInputStream(donorsFile))));
@@ -116,7 +118,7 @@ public class DataCruncher {
 
 		// Read in specimens
 		Path icgcDir = Paths.get(Constants.WORKING_ICGC_DIR);
-		File specimensFile = icgcDir.resolve(tumorType).resolve("specimen.tsv.gz").toFile();
+		File specimensFile = icgcDir.resolve(tumorType).resolve(Constants.SPECIMENS_FILENAME).toFile();
 
 		Iterable<CSVRecord> records = CSVFormat.TDF.builder().setHeader().build()
 				.parse(new InputStreamReader(new GZIPInputStream(new FileInputStream(specimensFile))));
@@ -124,9 +126,12 @@ public class DataCruncher {
 		records.forEach(tsvRecord -> {
 			String specimenId = tsvRecord.get(Constants.ICGC_SPECIMEN_ID);
 			String donorId = tsvRecord.get(Constants.ICGC_DONOR_ID);
-			String specimenType = tsvRecord.get("specimen_type").split("-")[0].trim();
-			String specimenSubType = tsvRecord.get("specimen_type").split("-")[1].trim();
-			String donorTreatmentType = tsvRecord.get("specimen_donor_treatment_type");
+			
+			String[] recordSpecimenType = tsvRecord.get(Constants.SPECIMEN_TYPE).split("-");
+			String specimenType = recordSpecimenType[0].trim();
+			String specimenSubType = recordSpecimenType[1].trim();
+			
+			String donorTreatmentType = tsvRecord.get(Constants.SPECIMEN_DONOR_TREATMENT_TYPE);
 
 			// Reasons to skip specimens:
 			// type is normal or xenograft or cell line
@@ -142,7 +147,7 @@ public class DataCruncher {
 		});
 
 		// Read in samples
-		File samplesFile = icgcDir.resolve(tumorType).resolve("sample.tsv.gz").toFile();
+		File samplesFile = icgcDir.resolve(tumorType).resolve(Constants.SAMPLES_FILENAME).toFile();
 		records = CSVFormat.TDF.builder().setHeader().build()
 				.parse(new InputStreamReader(new GZIPInputStream(new FileInputStream(samplesFile))));
 
@@ -225,11 +230,6 @@ public class DataCruncher {
 			String geneAffected = tsvRecord.get("gene_affected");
 			String sequencingStrategy = tsvRecord.get(Constants.SEQUENCING_STRATEGY);
 
-			// Can't use mutation ID from the data because it is NOT unique (e.g. same
-			// mutation id used in different samples)
-			String mutationKey = new StringBuffer().append(mutationId).append(donorId).append(specimenId)
-					.append(sampleId).append(chr).append(start).append(end).append(refBase).append(mutBase).toString();
-
 			Donor donor = donors.get(donorId);
 
 			/*-
@@ -238,17 +238,20 @@ public class DataCruncher {
 			 * 1. Gene affected column is blank (e.g. intergenic mutation)
 			 * 2. Gene affected is not in GRch37 (hg19) Ensembl assembly
 			 * 3. Gene is NOT protein coding
-			 * 4. We threw out this specimen previously (see criteria in readSpecimens)
+			 * 4. We threw out this specimen previously (see criteria in readSpecimensAndSamples)
 			 * 5. Not WGS
-			 * 6. Mutation is NOT SBS
 			 */
 			if (StringUtils.isBlank(geneAffected) || !gm.geneInAssembly(geneAffected)
 					|| gm.getGene(geneAffected, GeneNaming.ID).isNotProteinCoding()
-					|| !donor.containsSpecimen(specimenId) || !Constants.WGS.equals(sequencingStrategy)
-					|| !Constants.SBS.equals(mutationType)) {
+					|| !donor.containsSpecimen(specimenId) || !Constants.WGS.equals(sequencingStrategy)) {
 				continue;
 			}
 
+			// Can't just use mutation ID from the data because it is NOT unique (e.g. same
+			// mutation id used in different samples)
+			String mutationKey = new StringBuffer().append(mutationId).append(donorId).append(specimenId)
+					.append(sampleId).append(chr).append(start).append(end).append(refBase).append(mutBase).toString();
+			
 			Sample sample = donor.getSpecimen(specimenId).getSample(sampleId);
 
 			// Check to see if we've seen this mutation for this sample before (ie.
@@ -265,9 +268,9 @@ public class DataCruncher {
 
 			} else {
 
-				Mutation newMutation = new Mutation(mutationId, donorId, specimenId, sampleId, matchedSampleId, chr,
-						start, end, refBase, mutBase, totalReadCount, mutantAlleleReadCount, sequencingStrategy,
-						consequenceType, geneAffected);
+				Mutation newMutation = new Mutation(mutationId, donorId, specimenId, sampleId, matchedSampleId,
+						mutationType, chr, start, end, refBase, mutBase, totalReadCount, mutantAlleleReadCount,
+						sequencingStrategy, consequenceType, geneAffected);
 
 				newMutation.addRawLine(StringUtils.join(tsvRecord.toList(), '\t'));
 
@@ -280,7 +283,7 @@ public class DataCruncher {
 				// "MT")
 				List<DnaRange> promoterRanges = MapUtils.getObject(promoterRegionsByChr, chr, new ArrayList<>());
 				for (DnaRange promoterRange : promoterRanges) {
-					if (promoterRange.isInRange(start, end)) {
+					if (promoterRange.overlaps(start, end)) {
 						newMutation.setInPromoterRegion(true);
 
 						// No need to keep checking the rest of the promoter ranges
@@ -291,7 +294,7 @@ public class DataCruncher {
 				// Retrieve CFS ranges in null-safe manner in case of unusual chr (e.g. "MT")
 				List<DnaRange> cfsRanges = MapUtils.getObject(cfsRegionsByChr, chr, new ArrayList<>());
 				for (DnaRange cfsRange : cfsRanges) {
-					if (cfsRange.isInRange(start, end)) {
+					if (cfsRange.overlaps(start, end)) {
 						newMutation.setInCfsRegion(true);
 
 						// No need to keep checking the rest of the CFS ranges
@@ -360,6 +363,7 @@ public class DataCruncher {
 		final int zeroCutoff = 0;
 		
 		Path histogramPath = outputTimestampFolderPath.resolve(tumorType + "_histogram.tsv");
+		
 		Path promoterMutationPath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations.tsv");
 		Path promoterMutationUniquePath = outputTimestampFolderPath.resolve(tumorType + "_promoter_mutations_unique.tsv");
 		
@@ -381,7 +385,6 @@ public class DataCruncher {
 		Path cfsMutationsPath = outputTimestampFolderPath.resolve(tumorType + "_cfs_mutations.tsv");
 		Path cfsMutationsUniquePath = outputTimestampFolderPath.resolve(tumorType + "_cfs_mutations_unique.tsv");
 		
-		Files.createFile(histogramPath);
 		try (BufferedWriter histogramBw = Files.newBufferedWriter(histogramPath);
 				BufferedWriter promMutsBw = Files.newBufferedWriter(promoterMutationPath);
 				BufferedWriter promMutsUniBw = Files.newBufferedWriter(promoterMutationUniquePath);
@@ -398,13 +401,43 @@ public class DataCruncher {
 				BufferedWriter cfsMutsBw = Files.newBufferedWriter(cfsMutationsPath);
 				BufferedWriter cfsMutsUniBw = Files.newBufferedWriter(cfsMutationsUniquePath)) {
 
-			histogramBw.write(
-					"donorId" + "\t" + "Num specimens" + "\t" + "Num samples" + "\t" + "Num specimens with mutation"
-							+ "\t" + "Num specimens with expression" + "\t" + "Num specimens with both" + "\t"
-							+ "Num muts" + "\t" + "Num promMuts" + "\t" + "Num promMuts with expression >=" + highCutoff
-							+ "th percentile" + "\t" + "Num promMuts with expression >" + lowCutoff + " and <"
-							+ highCutoff + "\t" + "Num promMuts with expression <=" + lowCutoff + "\t"
-							+ "Num promMuts with expression =" + zeroCutoff + "\t" + "Num CFS mutations");
+			List<String> headerItems = new ArrayList<>();
+			headerItems.add("donor_id");
+			headerItems.add("specimens");
+			headerItems.add("samples");
+			headerItems.add("spec_w_muts");
+			headerItems.add("spec_w_exp");
+			headerItems.add("spec_w_both");
+			
+			headerItems.add("all_muts");
+			headerItems.add("non_prom_muts");
+			headerItems.add("prom_muts");
+			
+			headerItems.add("non_prom_sbs_muts");
+			headerItems.add("prom_sbs_muts");
+			headerItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff);
+			headerItems.add("prom_sbs_muts_w_exp_gt_" + lowCutoff + "_lt_" + highCutoff);
+			headerItems.add("prom_sbs_muts_w_exp_lte_" + lowCutoff);
+			headerItems.add("prom_sbs_muts_w_zero");
+			
+			headerItems.add("non_prom_mbs_muts");
+			headerItems.add("prom_mbs_muts");
+			headerItems.add("prom_mbs_muts_w_exp_gte_" + highCutoff);
+			headerItems.add("prom_mbs_muts_w_exp_gt_" + lowCutoff + "_lt_" + highCutoff);
+			headerItems.add("prom_mbs_muts_w_exp_lte_" + lowCutoff);
+			headerItems.add("prom_mbs_muts_w_zero");
+			
+			headerItems.add("non_prom_indel_muts");
+			headerItems.add("prom_indel_muts");
+			headerItems.add("prom_indel_muts_w_exp_gte_" + highCutoff);
+			headerItems.add("prom_indel_muts_w_exp_gt_" + lowCutoff + "_lt_" + highCutoff);
+			headerItems.add("prom_indel_muts_w_exp_lte_" + lowCutoff);
+			headerItems.add("prom_indel_muts_w_zero");
+			
+			headerItems.add("non_cfs_sbs_muts");
+			headerItems.add("cfs_sbs_muts");
+						
+			histogramBw.write(StringUtils.join(headerItems, '\t'));
 			histogramBw.newLine();
 
 			// Grab mutation file header
@@ -413,24 +446,14 @@ public class DataCruncher {
 			csvParser.close();
 			headerElements.add("Ref_Tri");
 			String header = StringUtils.join(headerElements, '\t');
-			promMutsBw.write(header);
-			promMutsBw.newLine();
-			promMutsHighBw.write(header);
-			promMutsHighBw.newLine();
-			promMutsHighUniBw.write(header);
-			promMutsHighUniBw.newLine();
-			promMutsMidBw.write(header);
-			promMutsMidBw.newLine();
-			promMutsLowBw.write(header);
-			promMutsLowBw.newLine();
-			promMutsZeroBw.write(header);
-			promMutsZeroBw.newLine();
-			nonPromMutsBw.write(header);
-			nonPromMutsBw.newLine();
-			cfsMutsBw.write(header);
-			cfsMutsBw.newLine();
-			cfsMutsUniBw.write(header);
-			cfsMutsUniBw.newLine();
+			
+			writeHeader(promMutsBw, promMutsUniBw, header);
+			writeHeader(promMutsHighBw, promMutsHighUniBw, header);
+			writeHeader(promMutsMidBw, promMutsMidUniBw, header);
+			writeHeader(promMutsLowBw, promMutsLowUniBw, header);
+			writeHeader(promMutsZeroBw, promMutsZeroUniBw, header);
+			writeHeader(nonPromMutsBw, nonPromMutsUniBw, header);
+			writeHeader(cfsMutsBw, cfsMutsUniBw, header);
 
 			for (Map.Entry<String, Donor> entry : donors.entrySet()) {
 				String donorId = entry.getKey();
@@ -442,66 +465,118 @@ public class DataCruncher {
 					continue;
 				}
 
+				Set<Mutation> mutations = donor.getMutations(MutationRange.NONE, MutationType.ALL);
+				Set<Mutation> nonPromoterMutations = donor.getMutations(MutationRange.NONPROMOTER, MutationType.ALL);
+				Set<Mutation> promoterMutations = donor.getMutations(MutationRange.PROMOTER, MutationType.ALL);
+				
+				// SBS
+				
+				Set<Mutation> nonPromoterSBSMutations = donor.getMutations(MutationRange.NONPROMOTER, MutationType.SBS);
+				Set<Mutation> promoterSBSMutations = donor.getMutations(MutationRange.PROMOTER, MutationType.SBS);
+				// Get promoter SBS mutations in high expressed genes (highCutoff <= HERE)
+				Set<Mutation> promoterSBSMutationsInHighExpressedGenes = donor.getMutationsInExpressedGenes(MutationRange.PROMOTER, MutationType.SBS, Operator.GREATERTHANOREQUAL, highCutoff);
+				// Get promoter SBS mutations in mid expressed genes (lowCutoff < HERE < highCutoff)
+				Set<Mutation> promoterSBSMutationsInMidExpressedGenes = donor.getMutationsInExpressedGenes(MutationRange.PROMOTER, MutationType.SBS, Operator.GREATERTHAN, lowCutoff, Operator.LESSTHAN, highCutoff);
+				// Get promoter SBS mutations in low expressed genes (HERE <= lowCutoff)
+				Set<Mutation> promoterSBSMutationsInLowExpressedGenes = donor.getMutationsInExpressedGenes(MutationRange.PROMOTER, MutationType.SBS, Operator.LESSTHANOREQUAL, lowCutoff);
+				// Get promoter SBS mutations in NON-expressed genes (HERE == zeroCutoff)
+				Set<Mutation> promoterSBSMutationsInZeroExpressedGenes = donor.getMutationsInExpressedGenes(MutationRange.PROMOTER, MutationType.SBS, Operator.EQUALTO, zeroCutoff);
+				
+				// MBS
+				
+				Set<Mutation> nonPromoterMBSMutations = donor.getMutations(MutationRange.NONPROMOTER, MutationType.MBS);
+				Set<Mutation> promoterMBSMutations = donor.getMutations(MutationRange.PROMOTER, MutationType.MBS);
+				// Get promoter SBS mutations in high expressed genes (highCutoff <= HERE)
+				Set<Mutation> promoterMBSMutationsInHighExpressedGenes = donor.getMutationsInExpressedGenes(MutationRange.PROMOTER, MutationType.MBS, Operator.GREATERTHANOREQUAL, highCutoff);
+				// Get promoter SBS mutations in mid expressed genes (lowCutoff < HERE < highCutoff)
+				Set<Mutation> promoterMBSMutationsInMidExpressedGenes = donor.getMutationsInExpressedGenes(MutationRange.PROMOTER, MutationType.MBS, Operator.GREATERTHAN, lowCutoff, Operator.LESSTHAN, highCutoff);
+				// Get promoter SBS mutations in low expressed genes (HERE <= lowCutoff)
+				Set<Mutation> promoterMBSMutationsInLowExpressedGenes = donor.getMutationsInExpressedGenes(MutationRange.PROMOTER, MutationType.MBS, Operator.LESSTHANOREQUAL, lowCutoff);
+				// Get promoter SBS mutations in NON-expressed genes (HERE == zeroCutoff)
+				Set<Mutation> promoterMBSMutationsInZeroExpressedGenes = donor.getMutationsInExpressedGenes(MutationRange.PROMOTER, MutationType.MBS, Operator.EQUALTO, zeroCutoff);
+				
+				// INDEL
+				
+				Set<Mutation> nonPromoterINDELMutations = donor.getIndelMutations(MutationRange.NONPROMOTER);
+				Set<Mutation> promoterINDELMutations = donor.getIndelMutations(MutationRange.PROMOTER);
+				// Get promoter INDEL mutations in high expressed genes (highCutoff <= HERE)
+				Set<Mutation> promoterINDELMutationsInHighExpressedGenes = donor.getIndelMutationsInExpressedGenes(MutationRange.PROMOTER, Operator.GREATERTHANOREQUAL, highCutoff);
+				// Get promoter INDEL mutations in mid expressed genes (lowCutoff < HERE < highCutoff)
+				Set<Mutation> promoterINDELMutationsInMidExpressedGenes = donor.getIndelMutationsInExpressedGenes(MutationRange.PROMOTER, Operator.GREATERTHAN, lowCutoff, Operator.LESSTHAN, highCutoff);
+				// Get promoter INDEL mutations in low expressed genes (HERE <= lowCutoff)
+				Set<Mutation> promoterINDELMutationsInLowExpressedGenes = donor.getIndelMutationsInExpressedGenes(MutationRange.PROMOTER, Operator.LESSTHANOREQUAL, lowCutoff);
+				// Get promoter INDEL mutations in NON-expressed genes (HERE == zeroCutoff)
+				Set<Mutation> promoterINDELMutationsInZeroExpressedGenes = donor.getIndelMutationsInExpressedGenes(MutationRange.PROMOTER, Operator.EQUALTO, zeroCutoff);
+
+				// CFS
+				
+				Set<Mutation> nonCfsSBSMutations = donor.getMutations(MutationRange.NONCFS, MutationType.SBS);
+				Set<Mutation> cfsSBSMutations = donor.getMutations(MutationRange.CFS, MutationType.SBS);
+				
 				histogramBw.write(donorId);
 				histogramBw.write("\t" + donor.getNumSpecimens());
 				histogramBw.write("\t" + donor.getNumSamples());
 				histogramBw.write("\t" + donor.getNumSpecimensWithMutationData());
 				histogramBw.write("\t" + donor.getNumSpecimensWithExpressionData());
 				histogramBw.write("\t" + donor.getNumSpecimensWithBoth());
-
-				Map<String, Mutation> mutations = donor.getMutations();
-				Set<Mutation> promoterMutations = donor.getPromoterMutations();
-				Set<Mutation> nonPromoterMutations = donor.getNonPromoterMutations();
-
-				// Get promoter mutations in high expressed genes (highCutoff <= HERE)
-				Set<Mutation> promoterMutationsInHighExpressedGenes = donor.getPromoterMutationsInExpressedGenes(highCutoff, Operator.GREATERTHANOREQUAL);
-
-				// Get promoter mutations in mid expressed genes (lowCutoff < HERE < highCutoff)
-				Set<Mutation> promoterMutationsInMidExpressedGenes = donor.getPromoterMutationsInExpressedGenes(highCutoff, Operator.LESSTHAN);
-				promoterMutationsInMidExpressedGenes.addAll(donor.getPromoterMutationsInExpressedGenes(lowCutoff, Operator.GREATERTHAN));
-
-				// Get promoter mutations in low expressed genes (HERE <= lowCutoff)
-				Set<Mutation> promoterMutationsInLowExpressedGenes = donor.getPromoterMutationsInExpressedGenes(lowCutoff, Operator.LESSTHANOREQUAL);
-
-				// Get promoter mutations in NON-expressed genes (HERE <= zeroCutoff)
-				Set<Mutation> promoterMutationsInZeroExpressedGenes = donor.getPromoterMutationsInExpressedGenes(zeroCutoff, Operator.LESSTHANOREQUAL);
 				
-				Set<Mutation> cfsMutations = donor.getCfsMutations();
-
 				histogramBw.write("\t" + mutations.size());
+				histogramBw.write("\t" + nonPromoterMutations.size());
 				histogramBw.write("\t" + promoterMutations.size());
-				histogramBw.write("\t" + promoterMutationsInHighExpressedGenes.size());
-				histogramBw.write("\t" + promoterMutationsInMidExpressedGenes.size());
-				histogramBw.write("\t" + promoterMutationsInLowExpressedGenes.size());
-				histogramBw.write("\t" + promoterMutationsInZeroExpressedGenes.size());
-				histogramBw.write("\t" + cfsMutations.size());
+				
+				histogramBw.write("\t" + nonPromoterSBSMutations.size());
+				histogramBw.write("\t" + promoterSBSMutations.size());
+				histogramBw.write("\t" + promoterSBSMutationsInHighExpressedGenes.size());
+				histogramBw.write("\t" + promoterSBSMutationsInMidExpressedGenes.size());
+				histogramBw.write("\t" + promoterSBSMutationsInLowExpressedGenes.size());
+				histogramBw.write("\t" + promoterSBSMutationsInZeroExpressedGenes.size());
+				
+				histogramBw.write("\t" + nonPromoterMBSMutations.size());
+				histogramBw.write("\t" + promoterMBSMutations.size());
+				histogramBw.write("\t" + promoterMBSMutationsInHighExpressedGenes.size());
+				histogramBw.write("\t" + promoterMBSMutationsInMidExpressedGenes.size());
+				histogramBw.write("\t" + promoterMBSMutationsInLowExpressedGenes.size());
+				histogramBw.write("\t" + promoterMBSMutationsInZeroExpressedGenes.size());
+				
+				histogramBw.write("\t" + nonPromoterINDELMutations.size());
+				histogramBw.write("\t" + promoterINDELMutations.size());
+				histogramBw.write("\t" + promoterINDELMutationsInHighExpressedGenes.size());
+				histogramBw.write("\t" + promoterINDELMutationsInMidExpressedGenes.size());
+				histogramBw.write("\t" + promoterINDELMutationsInLowExpressedGenes.size());
+				histogramBw.write("\t" + promoterINDELMutationsInZeroExpressedGenes.size());
+				
+				histogramBw.write("\t" + nonCfsSBSMutations.size());
+				histogramBw.write("\t" + cfsSBSMutations.size());
+				
 				histogramBw.newLine();
 
-				writeMutationsToFiles(promoterMutations, promMutsBw, promMutsUniBw);
-
-				writeMutationsToFiles(promoterMutationsInHighExpressedGenes, promMutsHighBw, promMutsHighUniBw);
-				
-				writeMutationsToFiles(promoterMutationsInMidExpressedGenes, promMutsMidBw, promMutsMidUniBw);
-				
-				writeMutationsToFiles(promoterMutationsInLowExpressedGenes, promMutsLowBw, promMutsLowUniBw);
-				
-				writeMutationsToFiles(promoterMutationsInZeroExpressedGenes, promMutsZeroBw, promMutsZeroUniBw);
-				
-				writeMutationsToFiles(nonPromoterMutations, nonPromMutsBw, nonPromMutsUniBw);
-				
-				writeMutationsToFiles(cfsMutations, cfsMutsBw, cfsMutsUniBw);
+				writeMutationsToFiles(promoterSBSMutations, promMutsBw, promMutsUniBw);
+				writeMutationsToFiles(promoterSBSMutationsInHighExpressedGenes, promMutsHighBw, promMutsHighUniBw);
+				writeMutationsToFiles(promoterSBSMutationsInMidExpressedGenes, promMutsMidBw, promMutsMidUniBw);
+				writeMutationsToFiles(promoterSBSMutationsInLowExpressedGenes, promMutsLowBw, promMutsLowUniBw);
+				writeMutationsToFiles(promoterSBSMutationsInZeroExpressedGenes, promMutsZeroBw, promMutsZeroUniBw);
+				writeMutationsToFiles(nonPromoterSBSMutations, nonPromMutsBw, nonPromMutsUniBw);
+				writeMutationsToFiles(cfsSBSMutations, cfsMutsBw, cfsMutsUniBw);
 
 			}
 		}
 	}
 
+	private void writeHeader(BufferedWriter promMutsBw, BufferedWriter promMutsUniBw, String header) throws IOException {
+		promMutsBw.write(header);
+		promMutsBw.newLine();
+		promMutsUniBw.write(header);
+		promMutsUniBw.newLine();
+	}
+
 	private void writeMutationsToFiles(Set<Mutation> promoterMutations, BufferedWriter allWriter, BufferedWriter uniqueWriter)
 			throws IOException {
 		for (Mutation mutation : promoterMutations) {
-			String str = mutation.getRawLines().get(0);
 			String triSeqWithMut = mutation.getTriSeqWithMut();
-			uniqueWriter.write(str + "\t" + triSeqWithMut);
+			
+			uniqueWriter.write(mutation.getRawLines().get(0) + "\t" + triSeqWithMut);
 			uniqueWriter.newLine();
+			
 			for (String line : mutation.getRawLines()) {
 				allWriter.write(line + "\t" + triSeqWithMut);
 				allWriter.newLine();
@@ -511,7 +586,7 @@ public class DataCruncher {
 
 	private CSVParser openMutationFile(String tumorTypeDir) throws IOException {
 		Path icgcDir = Paths.get(Constants.WORKING_ICGC_DIR);
-		File mutationsFile = icgcDir.resolve(tumorTypeDir).resolve("simple_somatic_mutation.open.tsv.gz").toFile();
+		File mutationsFile = icgcDir.resolve(tumorTypeDir).resolve(Constants.MUTATIONS_FILENAME).toFile();
 
 		CSVFormat csvFormat = CSVFormat.TDF.builder().setHeader().build();
 		return CSVParser.parse(new InputStreamReader(new GZIPInputStream(new FileInputStream(mutationsFile))),
@@ -554,8 +629,13 @@ public class DataCruncher {
 	}
 
 	private Map<String, List<DnaRange>> readFragileSites() throws IOException {
-		// Read in all fragile sites (from Ma et al. 2012 Int J Mol Sci)
-		// Cytoband locations from UCSC cytoband.txt.gz hg19
+		// Read in all fragile sites (from Table 1; Ma et al. 2012 Int J Mol Sci)
+		// Ma K, Qiu L, Mrasek K, Zhang J, Liehr T, Quintana LG, Li Z. Common fragile
+		// sites: genomic hotspots of DNA damage and carcinogenesis. Int J Mol Sci.
+		// 2012;13(9):11974-11999. doi: 10.3390/ijms130911974. Epub 2012 Sep 20. PMID:
+		// 23109895; PMCID: PMC3472787.
+		
+		// Cytoband locations from UCSC cytoband.txt.gz hg19 merged into cfs_sites.tsv
 
 		Map<String, List<DnaRange>> fragileSitesByChr = new HashMap<>();
 

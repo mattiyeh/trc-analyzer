@@ -1,6 +1,7 @@
 package org.coh.mattiyeh.datacruncher.model;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -109,100 +110,44 @@ public class Specimen {
 	public int getNumSamples() {
 		return samples.size();
 	}
-
-	public Map<String, Mutation> getMutations() {
-		Map<String, Mutation> mutations = new HashMap<>();
-
-		Sample mutationSample = getMutationSample();
-		if (mutationSample != null) {
-			mutations = mutationSample.getMutations();
-		}
-
-		return mutations;
-	}
-
-	public int getNumMutations() {
-		return getMutations().size();
-	}
-
-	public Set<Mutation> getPromoterMutations() {
-		Set<Mutation> promoterMutations = new TreeSet<>();
-
-		Sample mutationSample = getMutationSample();
-		if (mutationSample != null) {
-			promoterMutations = mutationSample.getPromoterMutations();
-		}
-
-		return promoterMutations;
-	}
-
-	public int getNumPromoterMutations() {
-		return getPromoterMutations().size();
+	
+	public Set<Mutation> getMutations(MutationRange mutationRange, MutationType mutationType) {
+		return getMutations(mutationRange, mutationType, Operator.GREATERTHANOREQUAL, 0, false);
 	}
 	
-	public Set<Mutation> getNonPromoterMutations() {
-		Set<Mutation> nonPromoterMutations = new TreeSet<>();
-
-		Sample mutationSample = getMutationSample();
-		if (mutationSample != null) {
-			nonPromoterMutations = mutationSample.getNonPromoterMutations();
-		}
-
-		return nonPromoterMutations;
-	}
-
-	public int getNumNonPromoterMutations() {
-		return getNonPromoterMutations().size();
-	}
-
-	public Set<Mutation> getCfsMutations() {
-		Set<Mutation> cfsMutations = new TreeSet<>();
-
-		Sample mutationSample = getMutationSample();
-		if (mutationSample != null) {
-			cfsMutations = mutationSample.getCfsMutations();
-		}
-
-		return cfsMutations;
-	}
-
-	public int getNumCfsMutations() {
-		return getCfsMutations().size();
-	}
-
-	public Set<Mutation> getPromoterMutationsInExpressedGenes(int nthPercentile, Operator op) {
-		Set<Mutation> promoterMutationsInExpressedGenes = new TreeSet<>();
-
-		// Internal check to make sure at least one sample has mutation data and one
-		// sample has expression data (it may be the same sample!)
-		if (!hasMutationAndExpressionData()) {
-			return promoterMutationsInExpressedGenes;
-		}
-
-		// First calculate the cutoff using the expression Sample
+	public Set<Mutation> getMutations(MutationRange mutationRange, MutationType mutationType, Operator op, int nthPercentile, boolean useCutoff) {
+		Set<Mutation> mutationsToReturn = new TreeSet<>();
+		Sample expressionSample = null;
 		double cutoff = 0;
-		Sample expressionSample = getExpressionSample();
-		if (expressionSample != null) {
-			if (nthPercentile == 0) {
-				cutoff = 0;
-			} else {
-				cutoff = PercentileUtil.calculateNthPercentile(expressionSample.getGeneNormExpressionLevelLogValues(),
-						nthPercentile);
+		
+		if (useCutoff) {
+			
+			// Internal check to make sure at least one sample has mutation data and one
+			// sample has expression data (it may be the same sample!)
+			if (!hasMutationAndExpressionData()) {
+				return mutationsToReturn;
+			}
+
+			// First calculate the cutoff using the expression Sample
+			expressionSample = getExpressionSample();
+			if (expressionSample != null) {
+				if (nthPercentile == 0) {
+					cutoff = 0;
+				} else {
+					List<Double> geneNormExpressionLevelLogValues = expressionSample.getGeneNormExpressionLevelLogValues();
+					cutoff = PercentileUtil.calculateNthPercentile(geneNormExpressionLevelLogValues, nthPercentile);
+				}
 			}
 		}
-
+		
 		// Now look for a sample with mutation data
 		Sample mutationSample = getMutationSample();
+		
 		if (mutationSample != null) {
-			promoterMutationsInExpressedGenes = mutationSample.getPromoterMutationsInExpressedGenes(cutoff, op,
-					expressionSample);
+			mutationsToReturn = mutationSample.getMutations(mutationRange, mutationType, op, cutoff, expressionSample);
 		}
-
-		return promoterMutationsInExpressedGenes;
-	}
-
-	public int getNumPromoterMutationsInExpressedGenes(int nthPercentile, Operator op) {
-		return getPromoterMutationsInExpressedGenes(nthPercentile, op).size();
+		
+		return mutationsToReturn;
 	}
 
 	public boolean isPrimary() {

@@ -2,7 +2,6 @@ package org.coh.mattiyeh.datacruncher.model;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -59,14 +58,6 @@ public class Sample {
 		return hasMutationData() && hasExpressionData();
 	}
 
-	public boolean hasPromoterMutation() {
-		return getNumPromoterMutations() > 0;
-	}
-
-	public boolean hasPromoterMutationAndExpressionData() {
-		return hasMutationAndExpressionData() && hasPromoterMutation();
-	}
-
 	public Map<String, Mutation> getMutations() {
 		return mutations;
 	}
@@ -74,84 +65,66 @@ public class Sample {
 	public Mutation getMutation(String mutationId) {
 		return mutations.get(mutationId);
 	}
-
-	public int getNumMutations() {
-		return mutations.size();
-	}
-
-	public Set<Mutation> getPromoterMutations() {
-		Set<Mutation> promoterMutations = new TreeSet<>();
-
-		mutations.forEach((mutationId, mutation) -> {
-			if (mutation.isInPromoterRegion()) {
-				promoterMutations.add(mutation);
-			}
-		});
-
-		return promoterMutations;
+	
+	public Set<Mutation> getMutations(MutationType mutationType) {
+		return getMutations(MutationRange.NONE, mutationType);
 	}
 	
-	public int getNumPromoterMutations() {
-		return getPromoterMutations().size();
+	/**
+	 * @param mutationRange
+	 * @param mutationType
+	 * @return
+	 */
+	public Set<Mutation> getMutations(MutationRange mutationRange, MutationType mutationType) {
+		return getMutations(mutationRange, mutationType, Operator.GREATERTHANOREQUAL, 0, null);
 	}
 
-	public Set<Mutation> getNonPromoterMutations() {
-		Set<Mutation> nonPromoterMutations = new TreeSet<>();
+	/**
+	 * @param mutationRange
+	 * @param mutationType
+	 * @param op
+	 * @param expressionCutoff
+	 * @param expressionSample
+	 * @return
+	 */
+	public Set<Mutation> getMutations(MutationRange mutationRange, MutationType mutationType, Operator op,
+			double expressionCutoff, Sample expressionSample) {
+		Set<Mutation> mutationsToReturn = new TreeSet<>();
 
 		mutations.forEach((mutationId, mutation) -> {
-			if (!mutation.isInPromoterRegion()) {
-				nonPromoterMutations.add(mutation);
-			}
-		});
 
-		return nonPromoterMutations;
-	}
+			// Check to see if mutation is located in promoter/cfs range, outside
+			// promoter/cfs, or we don't care (ie. NONE)
+			if ((MutationRange.PROMOTER.equals(mutationRange) && mutation.isInPromoterRegion())
+					|| (MutationRange.NONPROMOTER.equals(mutationRange) && !mutation.isInPromoterRegion())
+					|| (MutationRange.CFS.equals(mutationRange) && mutation.isInCfsRegion())
+					|| (MutationRange.NONCFS.equals(mutationRange) && !mutation.isInCfsRegion())
+					|| (MutationRange.NONE.equals(mutationRange))) {
 
-	public int getNumNonPromoterMutations() {
-		return getNonPromoterMutations().size();
-	}
+				// If this mutation matches the type we're looking for (eg. SBS) or we're
+				// looking for all types
+				if (mutation.getType().equals(mutationType) || MutationType.ALL.equals(mutationType)) {
 
-	public Set<Mutation> getCfsMutations() {
-		Set<Mutation> cfsMutations = new TreeSet<>();
-
-		mutations.forEach((mutationId, mutation) -> {
-			if (mutation.isInCfsRegion()) {
-				cfsMutations.add(mutation);
-			}
-		});
-
-		return cfsMutations;
-	}
-
-	public int getNumCfsMutations() {
-		return getCfsMutations().size();
-	}
-
-	public Set<Mutation> getPromoterMutationsInExpressedGenes(double cutoff, Operator op, Sample expressionSample) {
-		Set<Mutation> promoterMutationsInExpressedGenes = new TreeSet<>();
-
-		// All gene IDs in this sample we have expression data for
-		Set<String> geneIds = expressionSample.getGeneNormExpressionLevels().keySet();
-		for (String geneId : geneIds) {
-			// Is gene highly expressed? ... or whatever the operator calls for
-			if (op.apply(expressionSample.getGeneNormExpressionLevelLog(geneId), cutoff)) {
-
-				// Is there a promoter mutation for this gene?
-				for (Mutation mutation : getMutationsForGene(geneId)) {
-					if (mutation.isInPromoterRegion()) {
-						promoterMutationsInExpressedGenes.add(mutation);
+					// If expressionSample isn't null, then we have a request for mutations that
+					// meet an expression criteria
+					if (expressionSample == null) {
+						mutationsToReturn.add(mutation);
+					} else {
+						mutation.getGeneIdsAffected().forEach(geneId -> {
+							// Is gene highly expressed? ... or whatever the operator calls for
+							if (op.apply(expressionSample.getGeneNormExpressionLevelLog(geneId), expressionCutoff)) {
+								mutationsToReturn.add(mutation);
+							}
+						});
 					}
 				}
 			}
-		}
 
-		return promoterMutationsInExpressedGenes;
+		});
+
+		return mutationsToReturn;
 	}
-
-	public int getNumPromoterMutationsInExpressedGenes(double cutoff, Operator op, Sample expressionSample) {
-		return getPromoterMutationsInExpressedGenes(cutoff, op, expressionSample).size();
-	}
-
+	
 	public void addGeneNormExpressionLevel(String geneId, float normalizedReadCount) {
 		geneNormExpressionLevels.put(geneId, normalizedReadCount);
 	}
@@ -161,7 +134,7 @@ public class Sample {
 	}
 
 	public Double getGeneNormExpressionLevelLog(String geneId) {
-		return Functions.logTransform(MapUtils.getFloat(geneNormExpressionLevels, geneId, 0f));
+		return Functions.safeLogTransform(MapUtils.getFloat(geneNormExpressionLevels, geneId, 0f));
 	}
 
 	public List<Double> getGeneNormExpressionLevelLogValues() {
@@ -169,18 +142,6 @@ public class Sample {
 		geneNormExpressionLevels.forEach(
 				(geneId, value) -> geneNormExpressionLevelLogValues.add(getGeneNormExpressionLevelLog(geneId)));
 		return geneNormExpressionLevelLogValues;
-	}
-
-	private Set<Mutation> getMutationsForGene(String geneId) {
-		Set<Mutation> mutationsForGene = new HashSet<>();
-
-		mutations.forEach((mutationId, mutation) -> {
-			if (mutation.affectsGene(geneId)) {
-				mutationsForGene.add(mutation);
-			}
-		});
-
-		return mutationsForGene;
 	}
 
 }

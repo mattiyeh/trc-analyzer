@@ -6,7 +6,7 @@ public class Functions {
 	    throw new IllegalStateException("Utility class");
 	  }
 	
-	public static Double logTransform(double value) {
+	public static Double safeLogTransform(double value) {
 		return Math.log(value + 1);
 	}
 

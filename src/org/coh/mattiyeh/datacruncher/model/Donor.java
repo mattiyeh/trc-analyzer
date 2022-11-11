@@ -25,7 +25,7 @@ public class Donor {
 	public String getDonorId() {
 		return donorId;
 	}
-	
+
 	public Specimen getSpecimen(String specimenId) {
 		return specimens.get(specimenId);
 	}
@@ -116,23 +116,25 @@ public class Donor {
 		return specimenToReturn;
 	}
 
-	private Specimen pickBestSpecimen(Specimen specimenToReturn, Specimen newSpecimen) {
+	private Specimen pickBestSpecimen(Specimen oldSpecimen, Specimen newSpecimen) {
+		Specimen specimenToReturn = oldSpecimen;
+
 		// Reasons to get a new specimen:
 		// 1. New one is primary when old one is not
 		// 2. Both are primary but new one is a BETTER primary (eg. solid tissue)
 		// 3. New one is recurrence when old one is met
 
 		if (newSpecimen.isPrimary()) {
-			if (!specimenToReturn.isPrimary()) {
+			if (!oldSpecimen.isPrimary()) {
 				// Scenario #1
 				specimenToReturn = newSpecimen;
 			} else {
-				if (newSpecimen.isSolidTissueSubtype() && !specimenToReturn.isSolidTissueSubtype()) {
+				if (newSpecimen.isSolidTissueSubtype() && !oldSpecimen.isSolidTissueSubtype()) {
 					// Scenario #2
 					specimenToReturn = newSpecimen;
 				}
 			}
-		} else if (newSpecimen.isRecurrence() && specimenToReturn.isMetastasis()) {
+		} else if (newSpecimen.isRecurrence() && oldSpecimen.isMetastasis()) {
 			// Scenario #3
 			specimenToReturn = newSpecimen;
 		}
@@ -204,79 +206,66 @@ public class Donor {
 		return total;
 	}
 
-	public Map<String, Mutation> getMutations() {
-		Map<String, Mutation> mutations = new HashMap<>();
+	public Set<Mutation> getIndelMutations(MutationRange mutationRange) {
+		Set<Mutation> mutations = getMutations(mutationRange, MutationType.INSERTION);
+		mutations.addAll(getMutations(mutationRange, MutationType.DELETION));
+		return mutations;
+	}
+	
+	public Set<Mutation> getIndelMutationsInExpressedGenes(MutationRange mutationRange, Operator op, int nthPercentile) {
+		Set<Mutation> mutations = getMutations(mutationRange, MutationType.INSERTION, op, nthPercentile, true);
+		mutations.addAll(getMutations(mutationRange, MutationType.DELETION, op, nthPercentile, true));
+		return mutations;
+	}
+	
+	public Set<Mutation> getIndelMutationsInExpressedGenes(MutationRange mutationRange, Operator lowOp, int lowNthPercentile, Operator highOp, int highNthPercentile) {
+		Set<Mutation> mutations = getMutationsInExpressedGenes(mutationRange, MutationType.INSERTION, lowOp, lowNthPercentile, highOp, highNthPercentile);
+		mutations.addAll(getMutationsInExpressedGenes(mutationRange, MutationType.DELETION, lowOp, lowNthPercentile, highOp, highNthPercentile));
+		return mutations;
+	}
 
-		Specimen specimen = findSpecimenWithMutationAndExpressionData();
-		if (specimen != null) {
-			mutations = specimen.getMutations();
-		}
+	public Set<Mutation> getMutations(MutationRange mutationRange, MutationType mutationType) {
+		return getMutations(mutationRange, mutationType, Operator.GREATERTHANOREQUAL, 0, false);
+	}
+
+	public Set<Mutation> getMutationsInExpressedGenes(MutationRange mutationRange, MutationType mutationType, Operator op, int nthPercentile) {
+		return getMutations(mutationRange, mutationType, op, nthPercentile, true);
+	}
+
+	/**
+	 * @param mutationRange
+	 * @param mutationType
+	 * @param lowOp
+	 * @param lowNthPercentile
+	 * @param highOp
+	 * @param highNthPercentile
+	 * @return
+	 */
+	public Set<Mutation> getMutationsInExpressedGenes(MutationRange mutationRange, MutationType mutationType, Operator lowOp, int lowNthPercentile, Operator highOp, int highNthPercentile) {
+		Set<Mutation> mutations = getMutations(mutationRange, mutationType, lowOp, lowNthPercentile, true);
+		mutations.addAll(getMutations(mutationRange, mutationType, highOp, highNthPercentile, true));
 
 		return mutations;
 	}
 
-	public int getNumMutations() {
-		return getMutations().size();
-	}
-
-	public Set<Mutation> getPromoterMutations() {
-		Set<Mutation> promoterMutations = new TreeSet<>();
-
-		Specimen specimen = findSpecimenWithMutationAndExpressionData();
-		if (specimen != null) {
-			promoterMutations = specimen.getPromoterMutations();
-		}
-
-		return promoterMutations;
-	}
-
-	public int getNumPromoterMutations() {
-		return getPromoterMutations().size();
-	}
-	
-	public Set<Mutation> getNonPromoterMutations() {
-		Set<Mutation> nonPromoterMutations = new TreeSet<>();
+	/**
+	 * @param mutationRange
+	 * @param mutationType
+	 * @param op
+	 * @param nthPercentile
+	 * @param useCutoff
+	 * @return
+	 */
+	public Set<Mutation> getMutations(MutationRange mutationRange, MutationType mutationType, Operator op,
+			int nthPercentile, boolean useCutoff) {
+		Set<Mutation> mutations = new TreeSet<>();
 
 		Specimen specimen = findSpecimenWithMutationAndExpressionData();
 		if (specimen != null) {
-			nonPromoterMutations = specimen.getNonPromoterMutations();
+			mutations = specimen.getMutations(mutationRange, mutationType, op, nthPercentile, useCutoff);
 		}
 
-		return nonPromoterMutations;
-	}
-
-	public int getNumNonPromoterMutations() {
-		return getNonPromoterMutations().size();
-	}
-	
-	public Set<Mutation> getCfsMutations() {
-		Set<Mutation> cfsMutations = new TreeSet<>();
-
-		Specimen specimen = findSpecimenWithMutationAndExpressionData();
-		if (specimen != null) {
-			cfsMutations = specimen.getCfsMutations();
-		}
-
-		return cfsMutations;
-	}
-
-	public int getNumCfsMutations() {
-		return getCfsMutations().size();
-	}
-
-	public Set<Mutation> getPromoterMutationsInExpressedGenes(int nthPercentile, Operator op) {
-		Set<Mutation> promoterMutationsInExpressedGenes = new TreeSet<>();
-
-		Specimen specimen = findSpecimenWithMutationAndExpressionData();
-		if (specimen != null) {
-			promoterMutationsInExpressedGenes = specimen.getPromoterMutationsInExpressedGenes(nthPercentile, op);
-		}
-
-		return promoterMutationsInExpressedGenes;
-	}
-
-	public int getNumPromoterMutationsInExpressedGenes(int nthPercentile, Operator op) {
-		return getPromoterMutationsInExpressedGenes(nthPercentile, op).size();
+		return mutations;
 	}
 
 	public boolean containsSpecimen(String specimenId) {
