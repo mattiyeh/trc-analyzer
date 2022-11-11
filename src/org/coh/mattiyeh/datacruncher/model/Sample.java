@@ -65,19 +65,6 @@ public class Sample {
 	public Mutation getMutation(String mutationId) {
 		return mutations.get(mutationId);
 	}
-	
-	public Set<Mutation> getMutations(MutationType mutationType) {
-		return getMutations(MutationRange.NONE, mutationType);
-	}
-	
-	/**
-	 * @param mutationRange
-	 * @param mutationType
-	 * @return
-	 */
-	public Set<Mutation> getMutations(MutationRange mutationRange, MutationType mutationType) {
-		return getMutations(mutationRange, mutationType, Operator.GREATERTHANOREQUAL, 0, null);
-	}
 
 	/**
 	 * @param mutationRange
@@ -95,36 +82,44 @@ public class Sample {
 
 			// Check to see if mutation is located in promoter/cfs range, outside
 			// promoter/cfs, or we don't care (ie. NONE)
-			if ((MutationRange.PROMOTER.equals(mutationRange) && mutation.isInPromoterRegion())
-					|| (MutationRange.NONPROMOTER.equals(mutationRange) && !mutation.isInPromoterRegion())
-					|| (MutationRange.CFS.equals(mutationRange) && mutation.isInCfsRegion())
-					|| (MutationRange.NONCFS.equals(mutationRange) && !mutation.isInCfsRegion())
-					|| (MutationRange.NONE.equals(mutationRange))) {
+			// AND
+			// If this mutation matches the type we're looking for (eg. SBS) or we're
+			// looking for all types
 
-				// If this mutation matches the type we're looking for (eg. SBS) or we're
-				// looking for all types
-				if (mutation.getType().equals(mutationType) || MutationType.ALL.equals(mutationType)) {
+			if (checkRange(mutationRange, mutation) && checkType(mutationType, mutation)) {
 
-					// If expressionSample isn't null, then we have a request for mutations that
-					// meet an expression criteria
-					if (expressionSample == null) {
-						mutationsToReturn.add(mutation);
-					} else {
-						mutation.getGeneIdsAffected().forEach(geneId -> {
-							// Is gene highly expressed? ... or whatever the operator calls for
-							if (op.apply(expressionSample.getGeneNormExpressionLevelLog(geneId), expressionCutoff)) {
-								mutationsToReturn.add(mutation);
-							}
-						});
-					}
+				// If expressionSample isn't null, then we have a request for mutations that
+				// meet an expression criteria
+				if (expressionSample == null) {
+					mutationsToReturn.add(mutation);
+				} else {
+					mutation.getGeneIdsAffected().forEach(geneId -> {
+						// Is gene highly expressed? ... or whatever the operator calls for
+						if (op.apply(expressionSample.getGeneNormExpressionLevelLog(geneId), expressionCutoff)) {
+							mutationsToReturn.add(mutation);
+						}
+					});
 				}
+
 			}
 
 		});
 
 		return mutationsToReturn;
 	}
-	
+
+	private boolean checkRange(MutationRange mutationRange, Mutation mutation) {
+		return (MutationRange.PROMOTER.equals(mutationRange) && mutation.isInPromoterRegion())
+				|| (MutationRange.NONPROMOTER.equals(mutationRange) && !mutation.isInPromoterRegion())
+				|| (MutationRange.CFS.equals(mutationRange) && mutation.isInCfsRegion())
+				|| (MutationRange.NONCFS.equals(mutationRange) && !mutation.isInCfsRegion())
+				|| (MutationRange.NONE.equals(mutationRange));
+	}
+
+	private boolean checkType(MutationType mutationType, Mutation mutation) {
+		return mutationType.equals(mutation.getType()) || MutationType.ALL.equals(mutationType);
+	}
+
 	public void addGeneNormExpressionLevel(String geneId, float normalizedReadCount) {
 		geneNormExpressionLevels.put(geneId, normalizedReadCount);
 	}

@@ -111,10 +111,6 @@ public class Specimen {
 		return samples.size();
 	}
 	
-	public Set<Mutation> getMutations(MutationRange mutationRange, MutationType mutationType) {
-		return getMutations(mutationRange, mutationType, Operator.GREATERTHANOREQUAL, 0, false);
-	}
-	
 	public Set<Mutation> getMutations(MutationRange mutationRange, MutationType mutationType, Operator op, int nthPercentile, boolean useCutoff) {
 		Set<Mutation> mutationsToReturn = new TreeSet<>();
 		Sample expressionSample = null;

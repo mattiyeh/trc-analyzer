@@ -43,16 +43,6 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 			String type, String chr, int start, int end, String refBase, String mutBase, int totalReadCount,
 			int mutantAlleleReadCount, String sequencingStrategy, String consequenceType, String geneAffected) {
 
-		this(mutationId, donorId, specimenId, sampleId, matchedSampleId, type, chr, start, end, refBase, mutBase,
-				totalReadCount, mutantAlleleReadCount, sequencingStrategy, consequenceType, geneAffected,
-				new ArrayList<>());
-	}
-
-	public Mutation(String mutationId, String donorId, String specimenId, String sampleId, String matchedSampleId,
-			String type, String chr, int start, int end, String refBase, String mutBase, int totalReadCount,
-			int mutantAlleleReadCount, String sequencingStrategy, String consequenceType, String geneAffected,
-			List<String> rawLines) {
-		super();
 		this.mutationId = mutationId;
 		this.donorId = donorId;
 		this.specimenId = specimenId;
@@ -84,7 +74,7 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 		inPromoterRegion = false;
 		inCfsRegion = false;
 
-		this.rawLines = rawLines;
+		this.rawLines = new ArrayList<>();
 	}
 
 	public String getMutationId() {
@@ -180,6 +170,10 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 		mutationEffects.forEach(mutationEffect -> genesAffected.add(mutationEffect.getGeneAffected()));
 		return genesAffected;
 	}
+	
+	public int getNumGeneIdsAffected() {
+		return getGeneIdsAffected().size();
+	}
 
 	public boolean affectsGene(String geneId) {
 		for (MutationEffect mutationEffect : mutationEffects) {
@@ -196,6 +190,13 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 
 	public List<String> getRawLines() {
 		return rawLines;
+	}
+	
+	public String getFirstRawLine() {
+		if (!rawLines.isEmpty()) {
+			return rawLines.get(0);
+		}
+		return StringUtils.EMPTY;
 	}
 
 	public String getTriSeqWithMut() {

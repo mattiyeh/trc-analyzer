@@ -8,15 +8,8 @@
 	</classpathentry>
 	<classpathentry kind="lib" path="lib/commons-collections4-4.4/commons-collections4-4.4.jar"/>
 	<classpathentry kind="lib" path="lib/commons-csv-1.9.0/commons-csv-1.9.0.jar"/>
-	<classpathentry kind="lib" path="lib/commons-lang3-3.12.0/commons-lang3-3.12.0.jar"/>
 	<classpathentry kind="lib" path="lib/commons-math3-3.6.1/commons-math3-3.6.1.jar" sourcepath="lib/commons-math3-3.6.1/commons-math3-3.6.1-sources.jar"/>
 	<classpathentry kind="lib" path="lib/htsjdk-2.8.0.jar"/>
-	<classpathentry kind="lib" path="lib/mapdb-3.0.8.jar"/>
-	<classpathentry kind="lib" path="lib/kotlin-stdlib-1.6.0.jar"/>
-	<classpathentry kind="lib" path="lib/eclipse-collections-10.4.0.jar"/>
-	<classpathentry kind="lib" path="lib/eclipse-collections-api-10.4.0.jar"/>
-	<classpathentry kind="lib" path="lib/lz4-java-1.8.0.jar"/>
-	<classpathentry kind="lib" path="lib/guava-31.0.1-jre.jar"/>
-	<classpathentry kind="lib" path="lib/elsa-3.0.0-M5.jar"/>
+	<classpathentry kind="lib" path="lib/commons-lang3-3.12.0/commons-lang3-3.12.0.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

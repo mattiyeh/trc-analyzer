@@ -49,7 +49,7 @@ public class GenomeExtractor {
 	 * @throws IOException
 	 */
 	public TriSeq getTrinucleotideContext(String chr, int pos) {
-		ReferenceSequence rs = ifsf.getSubsequenceAt("chr" + chr, pos - 1, pos + 1);
+		ReferenceSequence rs = ifsf.getSubsequenceAt("chr" + chr, pos - 1L, pos + 1L);
 		String str = rs.getBaseString();
 		return new TriSeq(str.substring(0, 1), str.substring(1, 2), str.substring(2, 3));
 	}
