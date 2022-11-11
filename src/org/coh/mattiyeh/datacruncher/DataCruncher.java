@@ -70,7 +70,7 @@ public class DataCruncher {
 
 			System.out.println("Starting " + tumorType);
 
-			Path outputTimestampFolderPath = Paths.get(Constants.WORKING_DIR, "DataCruncherOutput__" + timestamp + "_" + tumorType);
+			Path outputTimestampFolderPath = Paths.get(Constants.OUTPUT_DIR, "DataCruncherOutput__" + timestamp + "_" + tumorType);
 			Files.createDirectories(outputTimestampFolderPath);
 
 			System.out.println("Reading donors...");
@@ -354,14 +354,14 @@ public class DataCruncher {
 
 	}
 
-	private void crunchNumbers(String tumorType, String tumorTypeDir, Path outputTimestampFolderPath, Map<String, Donor> donors)
+	private void crunchNumbers(String tumorType, String tumorTypeDir, Path outputFolderPath, Map<String, Donor> donors)
 			throws IOException {
 
 		final int highCutoff = 75;
 		final int lowCutoff = 25;
 		final int zeroCutoff = 0;
 		
-		Path promoterPath = outputTimestampFolderPath.resolve("promoter");
+		Path promoterPath = outputFolderPath.resolve("promoter");
 		Path promoterSbsPath = promoterPath.resolve("sbs");
 		Path promoterIndelPath = promoterPath.resolve("indel");
 		Path promoterMbsPath = promoterPath.resolve("mbs");
@@ -369,7 +369,7 @@ public class DataCruncher {
 		Files.createDirectories(promoterIndelPath);
 		Files.createDirectories(promoterMbsPath);
 		
-		Path cfsPath = outputTimestampFolderPath.resolve("cfs");
+		Path cfsPath = outputFolderPath.resolve("cfs");
 		Path cfsSbsPath = cfsPath.resolve("sbs");
 		Path cfsIndelPath = cfsPath.resolve("indel");
 		Path cfsMbsPath = cfsPath.resolve("mbs");
@@ -377,9 +377,9 @@ public class DataCruncher {
 		Files.createDirectories(cfsIndelPath);
 		Files.createDirectories(cfsMbsPath);
 		
-		Path metadataPath = outputTimestampFolderPath.resolve(tumorType + "_metadata.tsv");
+		Path metadataPath = outputFolderPath.resolve(tumorType + "_metadata.tsv");
 		
-		Path mutationPath = outputTimestampFolderPath.resolve(tumorType + "_mutations.tsv");
+		Path mutationPath = outputFolderPath.resolve(tumorType + "_mutations.tsv");
 		
 		// PROMOTER
 		
@@ -420,18 +420,18 @@ public class DataCruncher {
 		
 		// CFS-SBS
 		
-		Path nonCfsSbsMutationsPath = cfsPath.resolve(tumorType + "_non_cfs_sbs_mutations.tsv");
-		Path cfsSbsMutationsPath = cfsPath.resolve(tumorType + "_cfs_sbs_mutations.tsv");
+		Path nonCfsSbsMutationsPath = cfsSbsPath.resolve(tumorType + "_non_cfs_sbs_mutations.tsv");
+		Path cfsSbsMutationsPath = cfsSbsPath.resolve(tumorType + "_cfs_sbs_mutations.tsv");
 		
 		// CFS-INDEL
 		
-		Path nonCfsIndelMutationsPath = cfsPath.resolve(tumorType + "_non_cfs_indel_mutations.tsv");
-		Path cfsIndelMutationsPath = cfsPath.resolve(tumorType + "_cfs_indel_mutations.tsv");
+		Path nonCfsIndelMutationsPath = cfsIndelPath.resolve(tumorType + "_non_cfs_indel_mutations.tsv");
+		Path cfsIndelMutationsPath = cfsIndelPath.resolve(tumorType + "_cfs_indel_mutations.tsv");
 		
 		// CFS-MBS
 		
-		Path nonCfsMbsMutationsPath = cfsPath.resolve(tumorType + "_non_cfs_mbs_mutations.tsv");
-		Path cfsMbsMutationsPath = cfsPath.resolve(tumorType + "_cfs_mbs_mutations.tsv");
+		Path nonCfsMbsMutationsPath = cfsMbsPath.resolve(tumorType + "_non_cfs_mbs_mutations.tsv");
+		Path cfsMbsMutationsPath = cfsMbsPath.resolve(tumorType + "_cfs_mbs_mutations.tsv");
 		
 		try (BufferedWriter metadataBw = Files.newBufferedWriter(metadataPath);
 				

@@ -6,6 +6,7 @@ public class Constants {
 			+ "Drive\\City of Hope\\Projects\\TRC signatures\\";
 	
 	static final String DATA_FILES_DIR = WORKING_DIR + "data_files\\";
+	static final String OUTPUT_DIR = WORKING_DIR + "icgc-datasets-outputs\\";
 	
 	static final String DONORS_FILENAME = "donor.tsv.gz";
 	static final String SPECIMENS_FILENAME = "specimen.tsv.gz";
@@ -16,7 +17,7 @@ public class Constants {
 			"gallbladder", "kidney", "liver", "lung", "melanoma", "ovary", "pancreas", "pnet", "prostate", "stomach",
 			"uterus" };
 	
-	static final String[] TUMOR_TYPES = { "bone" };
+	static final String[] TUMOR_TYPES = { "cervix" };
 
 	static final String WORKING_ICGC_DIR = WORKING_DIR + "icgc-datasets\\";
 	static final String ICGC_SAMPLE_ID = "icgc_sample_id";
