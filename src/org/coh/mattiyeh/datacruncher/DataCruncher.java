@@ -38,6 +38,7 @@ import org.coh.mattiyeh.datacruncher.model.GeneNaming;
 import org.coh.mattiyeh.datacruncher.model.Mutation;
 import org.coh.mattiyeh.datacruncher.model.MutationRange;
 import org.coh.mattiyeh.datacruncher.model.MutationType;
+import org.coh.mattiyeh.datacruncher.model.OutputStats;
 import org.coh.mattiyeh.datacruncher.model.Sample;
 import org.coh.mattiyeh.datacruncher.model.Specimen;
 
@@ -45,6 +46,7 @@ public class DataCruncher {
 
 	private GeneManager gm;
 	private GenomeExtractor ge;
+	private OutputManager om;
 
 	/**
 	 * @throws NumberFormatException
@@ -54,42 +56,66 @@ public class DataCruncher {
 
 		// Create output folder
 		final String timestamp = new SimpleDateFormat("yyyy.MM.dd_HH.mm.ss").format(new Date());
+		
+		final int highCutoff = 75;
+		final int lowCutoff = 25;
 
 		System.out.println("Initializing Gene Manager...");
 		gm = new GeneManager();
 
 		System.out.println("Initializing Genome Extractor...");
 		ge = new GenomeExtractor(new File(Constants.DATA_FILES_DIR + "hg19.fa"));
+		
+		System.out.println("Initializing Output Manager...");
+		om = new OutputManager(highCutoff, lowCutoff);
 
 		System.out.println();
+		
+		Path outputFolderPath = Paths.get(Constants.OUTPUT_DIR + "__" + timestamp);
+		Files.createDirectories(outputFolderPath);
+		Path summaryPath = outputFolderPath.resolve("summary.tsv");
+		
+		try (BufferedWriter summaryBw = Files.newBufferedWriter(summaryPath)) {
 
-		for (int i = 0; i < Constants.TUMOR_TYPES.length; i++) {
+			List<String> metadataHeaderItems = om.getMetadataHeaderItems();
+			metadataHeaderItems.remove(0);
+			metadataHeaderItems.add(0, "tumor_type");
+			writeLine(summaryBw, StringUtils.join(metadataHeaderItems, '\t'));
+			
+			for (int i = 0; i < Constants.TUMOR_TYPES.length; i++) {
 
-			String tumorType = Constants.TUMOR_TYPES[i];
-			String tumorTypeDir = "icgc-dataset-" + tumorType;
+				String tumorType = Constants.TUMOR_TYPES[i];
+				String tumorTypeDir = "icgc-dataset-" + tumorType;
 
-			System.out.println("Starting " + tumorType);
+				System.out.println("Starting " + tumorType);
 
-			Path outputTimestampFolderPath = Paths.get(Constants.OUTPUT_DIR + "__" + timestamp, "DCO__" + timestamp + "_" + tumorType);
-			Files.createDirectories(outputTimestampFolderPath);
+				Path outputTimestampFolderPath = outputFolderPath.resolve("DCO__" + timestamp + "_" + tumorType);
+				Files.createDirectories(outputTimestampFolderPath);
 
-			System.out.println("Reading donors...");
-			Map<String, Donor> donors = readDonors(tumorTypeDir);
+				System.out.println("Reading donors...");
+				Map<String, Donor> donors = readDonors(tumorTypeDir);
 
-			System.out.println("Reading specimens...");
-			readSpecimensAndSamples(tumorTypeDir, donors);
+				System.out.println("Reading specimens...");
+				readSpecimensAndSamples(tumorTypeDir, donors);
 
-			System.out.println("Reading mutations...");
-			readMutations(tumorTypeDir, donors);
+				System.out.println("Reading mutations...");
+				readMutations(tumorTypeDir, donors);
 
-			System.out.println("Reading expression data...");
-			readExpressionLevels(tumorTypeDir, donors);
+				System.out.println("Reading expression data...");
+				readExpressionLevels(tumorTypeDir, donors);
 
-			System.out.println("Crunching numbers...");
-			crunchNumbers(tumorType, tumorTypeDir, outputTimestampFolderPath, donors);
+				System.out.println("Crunching numbers...");
+				OutputStats os = crunchNumbers(tumorType, tumorTypeDir, outputTimestampFolderPath, donors);
+				
+				summaryBw.write(tumorType);
+				summaryBw.write("\t" + os.getLine());
+				summaryBw.newLine();
 
-			System.out.println();
+				System.out.println();
+			}
+			
 		}
+
 		System.out.println("Done.");
 	}
 
@@ -354,8 +380,10 @@ public class DataCruncher {
 
 	}
 
-	private void crunchNumbers(String tumorType, String tumorTypeDir, Path outputFolderPath, Map<String, Donor> donors)
+	private OutputStats crunchNumbers(String tumorType, String tumorTypeDir, Path outputFolderPath, Map<String, Donor> donors)
 			throws IOException {
+		
+		OutputStats os = new OutputStats();
 
 		final int highCutoff = 75;
 		final int lowCutoff = 25;
@@ -473,54 +501,8 @@ public class DataCruncher {
 				BufferedWriter nonCfsMbsMutsBw = Files.newBufferedWriter(nonCfsMbsMutationsPath);
 				BufferedWriter cfsMbsMutsBw = Files.newBufferedWriter(cfsMbsMutationsPath);) {
 
-			List<String> headerItems = new ArrayList<>();
-			headerItems.add("donor_id");
-			headerItems.add("specimens");
-			headerItems.add("samples");
-			headerItems.add("spec_w_muts");
-			headerItems.add("spec_w_exp");
-			headerItems.add("spec_w_both");
-			
-			headerItems.add("all_muts");
-			
-			headerItems.add("non_prom_muts");
-			headerItems.add("prom_muts");
-			
-			headerItems.add("non_prom_sbs_muts");
-			headerItems.add("prom_sbs_muts");
-			headerItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff);
-			headerItems.add("prom_sbs_muts_w_exp_gt_" + lowCutoff + "_lt_" + highCutoff);
-			headerItems.add("prom_sbs_muts_w_exp_lte_" + lowCutoff);
-			headerItems.add("prom_sbs_muts_w_zero");
-			
-			headerItems.add("non_prom_indel_muts");
-			headerItems.add("prom_indel_muts");
-			headerItems.add("prom_indel_muts_w_exp_gte_" + highCutoff);
-			headerItems.add("prom_indel_muts_w_exp_gt_" + lowCutoff + "_lt_" + highCutoff);
-			headerItems.add("prom_indel_muts_w_exp_lte_" + lowCutoff);
-			headerItems.add("prom_indel_muts_w_zero");
-			
-			headerItems.add("non_prom_mbs_muts");
-			headerItems.add("prom_mbs_muts");
-			headerItems.add("prom_mbs_muts_w_exp_gte_" + highCutoff);
-			headerItems.add("prom_mbs_muts_w_exp_gt_" + lowCutoff + "_lt_" + highCutoff);
-			headerItems.add("prom_mbs_muts_w_exp_lte_" + lowCutoff);
-			headerItems.add("prom_mbs_muts_w_zero");
-			
-			headerItems.add("non_cfs_muts");
-			headerItems.add("cfs_muts");
-			
-			headerItems.add("non_cfs_sbs_muts");
-			headerItems.add("cfs_sbs_muts");
-			
-			headerItems.add("non_cfs_indel_muts");
-			headerItems.add("cfs_indel_muts");
-			
-			headerItems.add("non_cfs_mbs_muts");
-			headerItems.add("cfs_mbs_muts");
-						
-			metadataBw.write(StringUtils.join(headerItems, '\t'));
-			metadataBw.newLine();
+			List<String> metadataHeaderItems = om.getMetadataHeaderItems();
+			writeLine(metadataBw, StringUtils.join(metadataHeaderItems, '\t'));
 
 			// Grab mutation file header
 			CSVParser csvParser = openMutationFile(tumorTypeDir);
@@ -531,43 +513,43 @@ public class DataCruncher {
 			headerElements.add("all_genes_affected");
 			String header = StringUtils.join(headerElements, '\t');
 			
-			writeHeader(mutsBw, header);
+			writeLine(mutsBw, header);
 			
-			writeHeader(nonPromMutsBw, header);
-			writeHeader(promMutsBw, header);
+			writeLine(nonPromMutsBw, header);
+			writeLine(promMutsBw, header);
 			
-			writeHeader(nonPromSbsMutsBw, header);
-			writeHeader(promSbsMutsBw, header);
-			writeHeader(promSbsMutsHighBw, header);
-			writeHeader(promSbsMutsMidBw, header);
-			writeHeader(promSbsMutsLowBw, header);
-			writeHeader(promSbsMutsZeroBw, header);
+			writeLine(nonPromSbsMutsBw, header);
+			writeLine(promSbsMutsBw, header);
+			writeLine(promSbsMutsHighBw, header);
+			writeLine(promSbsMutsMidBw, header);
+			writeLine(promSbsMutsLowBw, header);
+			writeLine(promSbsMutsZeroBw, header);
 			
-			writeHeader(nonPromIndelMutsBw, header);
-			writeHeader(promIndelMutsBw, header);
-			writeHeader(promIndelMutsHighBw, header);
-			writeHeader(promIndelMutsMidBw, header);
-			writeHeader(promIndelMutsLowBw, header);
-			writeHeader(promIndelMutsZeroBw, header);
+			writeLine(nonPromIndelMutsBw, header);
+			writeLine(promIndelMutsBw, header);
+			writeLine(promIndelMutsHighBw, header);
+			writeLine(promIndelMutsMidBw, header);
+			writeLine(promIndelMutsLowBw, header);
+			writeLine(promIndelMutsZeroBw, header);
 			
-			writeHeader(nonPromMbsMutsBw, header);
-			writeHeader(promMbsMutsBw, header);
-			writeHeader(promMbsMutsHighBw, header);
-			writeHeader(promMbsMutsMidBw, header);
-			writeHeader(promMbsMutsLowBw, header);
-			writeHeader(promMbsMutsZeroBw, header);
+			writeLine(nonPromMbsMutsBw, header);
+			writeLine(promMbsMutsBw, header);
+			writeLine(promMbsMutsHighBw, header);
+			writeLine(promMbsMutsMidBw, header);
+			writeLine(promMbsMutsLowBw, header);
+			writeLine(promMbsMutsZeroBw, header);
 			
-			writeHeader(nonCfsMutsBw, header);
-			writeHeader(cfsMutsBw, header);
+			writeLine(nonCfsMutsBw, header);
+			writeLine(cfsMutsBw, header);
 			
-			writeHeader(nonCfsSbsMutsBw, header);
-			writeHeader(cfsSbsMutsBw, header);
+			writeLine(nonCfsSbsMutsBw, header);
+			writeLine(cfsSbsMutsBw, header);
 			
-			writeHeader(nonCfsIndelMutsBw, header);
-			writeHeader(cfsIndelMutsBw, header);
+			writeLine(nonCfsIndelMutsBw, header);
+			writeLine(cfsIndelMutsBw, header);
 			
-			writeHeader(nonCfsMbsMutsBw, header);
-			writeHeader(cfsMbsMutsBw, header);
+			writeLine(nonCfsMbsMutsBw, header);
+			writeLine(cfsMbsMutsBw, header);
 
 			for (Map.Entry<String, Donor> entry : donors.entrySet()) {
 				String donorId = entry.getKey();
@@ -644,6 +626,50 @@ public class DataCruncher {
 				
 				Set<Mutation> nonCfsMbsMutations = donor.getMutations(MutationRange.NONCFS, MutationType.MBS);
 				Set<Mutation> cfsMbsMutations = donor.getMutations(MutationRange.CFS, MutationType.MBS);
+				
+				os.addNumSpecimens(donor.getNumSpecimens());
+				os.addNumSamples(donor.getNumSamples());
+				os.addNumSpecimensWithMutationData(donor.getNumSpecimensWithMutationData());
+				os.addNumSpecimensWithExpressionData(donor.getNumSpecimensWithExpressionData());
+				os.addNumSpecimensWithBoth(donor.getNumSpecimensWithBoth());
+				
+				os.addNumMutations(mutations.size());
+				
+				os.addNumNonPromoterMutations(nonPromoterMutations.size());
+				os.addNumPromoterMutations(promoterMutations.size());
+				
+				os.addNumNonPromoterSbsMutations(nonPromoterSbsMutations.size());
+				os.addNumPromoterSbsMutations(promoterSbsMutations.size());
+				os.addNumPromoterSbsMutationsHighExp(promoterSbsMutationsInHighExpressedGenes.size());
+				os.addNumPromoterSbsMutationsMidExp(promoterSbsMutationsInMidExpressedGenes.size());
+				os.addNumPromoterSbsMutationsLowExp(promoterSbsMutationsInLowExpressedGenes.size());
+				os.addNumPromoterSbsMutationsZeroExp(promoterSbsMutationsInZeroExpressedGenes.size());
+				
+				os.addNumNonPromoterIndelMutations(nonPromoterIndelMutations.size());
+				os.addNumPromoterIndelMutations(promoterIndelMutations.size());
+				os.addNumPromoterIndelMutationsHighExp(promoterIndelMutationsInHighExpressedGenes.size());
+				os.addNumPromoterIndelMutationsMidExp(promoterIndelMutationsInMidExpressedGenes.size());
+				os.addNumPromoterIndelMutationsLowExp(promoterIndelMutationsInLowExpressedGenes.size());
+				os.addNumPromoterIndelMutationsZeroExp(promoterIndelMutationsInZeroExpressedGenes.size());
+				
+				os.addNumNonPromoterMbsMutations(nonPromoterMbsMutations.size());
+				os.addNumPromoterMbsMutations(promoterMbsMutations.size());
+				os.addNumPromoterMbsMutationsHighExp(promoterMbsMutationsInHighExpressedGenes.size());
+				os.addNumPromoterMbsMutationsMidExp(promoterMbsMutationsInMidExpressedGenes.size());
+				os.addNumPromoterMbsMutationsLowExp(promoterMbsMutationsInLowExpressedGenes.size());
+				os.addNumPromoterMbsMutationsZeroExp(promoterMbsMutationsInZeroExpressedGenes.size());
+				
+				os.addNumNonCfsMutations(nonCfsMutations.size());
+				os.addNumCfsMutations(cfsMutations.size());
+				
+				os.addNumNonCfsSbsMutations(nonCfsSbsMutations.size());
+				os.addNumCfsSbsMutations(cfsSbsMutations.size());
+				
+				os.addNumNonCfsIndelMutations(nonCfsIndelMutations.size());
+				os.addNumCfsIndelMutations(cfsIndelMutations.size());
+				
+				os.addNumNonCfsMbsMutations(nonCfsMbsMutations.size());
+				os.addNumCfsMbsMutations(cfsMbsMutations.size());
 				
 				metadataBw.write(donorId);
 				metadataBw.write("\t" + donor.getNumSpecimens());
@@ -748,10 +774,12 @@ public class DataCruncher {
 
 			}
 		}
+		
+		return os;
 	}
 
-	private void writeHeader(BufferedWriter bw, String header) throws IOException {
-		bw.write(header);
+	private void writeLine(BufferedWriter bw, String line) throws IOException {
+		bw.write(line);
 		bw.newLine();
 	}
 
