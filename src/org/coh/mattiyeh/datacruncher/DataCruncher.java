@@ -408,6 +408,9 @@ public class DataCruncher {
 		Path metadataPath = outputFolderPath.resolve(tumorType + "_metadata.tsv");
 		
 		Path mutationPath = outputFolderPath.resolve(tumorType + "_mutations.tsv");
+		Path sbsMutationPath = outputFolderPath.resolve(tumorType + "_sbs_mutations.tsv");
+		Path indelMutationPath = outputFolderPath.resolve(tumorType + "_indel_mutations.tsv");
+		Path mbsMutationPath = outputFolderPath.resolve(tumorType + "_mbs_mutations.tsv");
 		
 		// PROMOTER
 		
@@ -464,6 +467,9 @@ public class DataCruncher {
 		try (BufferedWriter metadataBw = Files.newBufferedWriter(metadataPath);
 				
 				BufferedWriter mutsBw = Files.newBufferedWriter(mutationPath);
+				BufferedWriter sbsMutsBw = Files.newBufferedWriter(sbsMutationPath);
+				BufferedWriter indelMutsBw = Files.newBufferedWriter(indelMutationPath);
+				BufferedWriter mbsMutsBw = Files.newBufferedWriter(mbsMutationPath);
 				
 				BufferedWriter nonPromMutsBw = Files.newBufferedWriter(nonPromoterMutationPath);
 				BufferedWriter promMutsBw = Files.newBufferedWriter(promoterMutationPath);
@@ -514,6 +520,9 @@ public class DataCruncher {
 			String header = StringUtils.join(headerElements, '\t');
 			
 			writeLine(mutsBw, header);
+			writeLine(sbsMutsBw, header);
+			writeLine(indelMutsBw, header);
+			writeLine(mbsMutsBw, header);
 			
 			writeLine(nonPromMutsBw, header);
 			writeLine(promMutsBw, header);
@@ -562,6 +571,9 @@ public class DataCruncher {
 				}
 
 				Set<Mutation> mutations = donor.getMutations(MutationRange.NONE, MutationType.ALL);
+				Set<Mutation> sbsMutations = donor.getMutations(MutationRange.NONE, MutationType.SBS);
+				Set<Mutation> indelMutations = donor.getIndelMutations(MutationRange.NONE);
+				Set<Mutation> mbsMutations = donor.getMutations(MutationRange.NONE, MutationType.MBS);
 				
 				// PROMOTER
 				
@@ -634,6 +646,9 @@ public class DataCruncher {
 				os.addNumSpecimensWithBoth(donor.getNumSpecimensWithBoth());
 				
 				os.addNumMutations(mutations.size());
+				os.addNumSbsMutations(sbsMutations.size());
+				os.addNumIndelMutations(indelMutations.size());
+				os.addNumMbsMutations(mbsMutations.size());
 				
 				os.addNumNonPromoterMutations(nonPromoterMutations.size());
 				os.addNumPromoterMutations(promoterMutations.size());
@@ -679,6 +694,9 @@ public class DataCruncher {
 				metadataBw.write("\t" + donor.getNumSpecimensWithBoth());
 				
 				metadataBw.write("\t" + mutations.size());
+				metadataBw.write("\t" + sbsMutations.size());
+				metadataBw.write("\t" + indelMutations.size());
+				metadataBw.write("\t" + mbsMutations.size());
 				
 				metadataBw.write("\t" + nonPromoterMutations.size());
 				metadataBw.write("\t" + promoterMutations.size());
@@ -719,6 +737,9 @@ public class DataCruncher {
 				metadataBw.newLine();
 				
 				writeMutationsToFiles(mutations, mutsBw);
+				writeMutationsToFiles(sbsMutations, sbsMutsBw);
+				writeMutationsToFiles(indelMutations, indelMutsBw);
+				writeMutationsToFiles(mbsMutations, mbsMutsBw);
 				
 				// PROMOTER
 				

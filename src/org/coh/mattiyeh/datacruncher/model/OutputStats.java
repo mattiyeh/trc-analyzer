@@ -14,6 +14,9 @@ public class OutputStats {
 	private int numSpecimensWithBoth;
 
 	private int numMutations;
+	private int numSbsMutations;
+	private int numIndelMutations;
+	private int numMbsMutations;
 
 	private int numNonPromoterMutations;
 	private int numPromoterMutations;
@@ -119,6 +122,18 @@ public class OutputStats {
 	
 	public void addNumMutations(int numMutations) {
 		this.numMutations += numMutations;
+	}
+	
+	public void addNumSbsMutations(int numSbsMutations) {
+		this.numSbsMutations += numSbsMutations;
+	}
+	
+	public void addNumIndelMutations(int numIndelMutations) {
+		this.numIndelMutations += numIndelMutations;
+	}
+	
+	public void addNumMbsMutations(int numMbsMutations) {
+		this.numMbsMutations += numMbsMutations;
 	}
 	
 	public void addNumNonPromoterMutations(int numNonPromoterMutations) {
@@ -232,278 +247,6 @@ public class OutputStats {
 	public void addNumCfsMbsMutations(int numCfsMbsMutations) {
 		this.numCfsMbsMutations += numCfsMbsMutations;
 	}
-
-	public int getNumSpecimens() {
-		return numSpecimens;
-	}
-
-	public void setNumSpecimens(int numSpecimens) {
-		this.numSpecimens = numSpecimens;
-	}
-
-	public int getNumSamples() {
-		return numSamples;
-	}
-
-	public void setNumSamples(int numSamples) {
-		this.numSamples = numSamples;
-	}
-
-	public int getNumSpecimensWithMutationData() {
-		return numSpecimensWithMutationData;
-	}
-
-	public void setNumSpecimensWithMutationData(int numSpecimensWithMutationData) {
-		this.numSpecimensWithMutationData = numSpecimensWithMutationData;
-	}
-
-	public int getNumSpecimensWithExpressionData() {
-		return numSpecimensWithExpressionData;
-	}
-
-	public void setNumSpecimensWithExpressionData(int numSpecimensWithExpressionData) {
-		this.numSpecimensWithExpressionData = numSpecimensWithExpressionData;
-	}
-
-	public int getNumSpecimensWithBoth() {
-		return numSpecimensWithBoth;
-	}
-
-	public void setNumSpecimensWithBoth(int numSpecimensWithBoth) {
-		this.numSpecimensWithBoth = numSpecimensWithBoth;
-	}
-
-	public int getNumMutations() {
-		return numMutations;
-	}
-
-	public void setNumMutations(int numMutations) {
-		this.numMutations = numMutations;
-	}
-
-	public int getNumNonPromoterMutations() {
-		return numNonPromoterMutations;
-	}
-
-	public void setNumNonPromoterMutations(int numNonPromoterMutations) {
-		this.numNonPromoterMutations = numNonPromoterMutations;
-	}
-
-	public int getNumPromoterMutations() {
-		return numPromoterMutations;
-	}
-
-	public void setNumPromoterMutations(int numPromoterMutations) {
-		this.numPromoterMutations = numPromoterMutations;
-	}
-
-	public int getNumNonPromoterSbsMutations() {
-		return numNonPromoterSbsMutations;
-	}
-
-	public void setNumNonPromoterSbsMutations(int numNonPromoterSbsMutations) {
-		this.numNonPromoterSbsMutations = numNonPromoterSbsMutations;
-	}
-
-	public int getNumPromoterSbsMutations() {
-		return numPromoterSbsMutations;
-	}
-
-	public void setNumPromoterSbsMutations(int numPromoterSbsMutations) {
-		this.numPromoterSbsMutations = numPromoterSbsMutations;
-	}
-
-	public int getNumPromoterSbsMutationsHighExp() {
-		return numPromoterSbsMutationsHighExp;
-	}
-
-	public void setNumPromoterSbsMutationsHighExp(int numPromoterSbsMutationsHighExp) {
-		this.numPromoterSbsMutationsHighExp = numPromoterSbsMutationsHighExp;
-	}
-
-	public int getNumPromoterSbsMutationsMidExp() {
-		return numPromoterSbsMutationsMidExp;
-	}
-
-	public void setNumPromoterSbsMutationsMidExp(int numPromoterSbsMutationsMidExp) {
-		this.numPromoterSbsMutationsMidExp = numPromoterSbsMutationsMidExp;
-	}
-
-	public int getNumPromoterSbsMutationsLowExp() {
-		return numPromoterSbsMutationsLowExp;
-	}
-
-	public void setNumPromoterSbsMutationsLowExp(int numPromoterSbsMutationsLowExp) {
-		this.numPromoterSbsMutationsLowExp = numPromoterSbsMutationsLowExp;
-	}
-
-	public int getNumPromoterSbsMutationsZeroExp() {
-		return numPromoterSbsMutationsZeroExp;
-	}
-
-	public void setNumPromoterSbsMutationsZeroExp(int numPromoterSbsMutationsZeroExp) {
-		this.numPromoterSbsMutationsZeroExp = numPromoterSbsMutationsZeroExp;
-	}
-
-	public int getNumNonPromoterIndelMutations() {
-		return numNonPromoterIndelMutations;
-	}
-
-	public void setNumNonPromoterIndelMutations(int numNonPromoterIndelMutations) {
-		this.numNonPromoterIndelMutations = numNonPromoterIndelMutations;
-	}
-
-	public int getNumPromoterIndelMutations() {
-		return numPromoterIndelMutations;
-	}
-
-	public void setNumPromoterIndelMutations(int numPromoterIndelMutations) {
-		this.numPromoterIndelMutations = numPromoterIndelMutations;
-	}
-
-	public int getNumPromoterIndelMutationsHighExp() {
-		return numPromoterIndelMutationsHighExp;
-	}
-
-	public void setNumPromoterIndelMutationsHighExp(int numPromoterIndelMutationsHighExp) {
-		this.numPromoterIndelMutationsHighExp = numPromoterIndelMutationsHighExp;
-	}
-
-	public int getNumPromoterIndelMutationsMidExp() {
-		return numPromoterIndelMutationsMidExp;
-	}
-
-	public void setNumPromoterIndelMutationsMidExp(int numPromoterIndelMutationsMidExp) {
-		this.numPromoterIndelMutationsMidExp = numPromoterIndelMutationsMidExp;
-	}
-
-	public int getNumPromoterIndelMutationsLowExp() {
-		return numPromoterIndelMutationsLowExp;
-	}
-
-	public void setNumPromoterIndelMutationsLowExp(int numPromoterIndelMutationsLowExp) {
-		this.numPromoterIndelMutationsLowExp = numPromoterIndelMutationsLowExp;
-	}
-
-	public int getNumPromoterIndelMutationsZeroExp() {
-		return numPromoterIndelMutationsZeroExp;
-	}
-
-	public void setNumPromoterIndelMutationsZeroExp(int numPromoterIndelMutationsZeroExp) {
-		this.numPromoterIndelMutationsZeroExp = numPromoterIndelMutationsZeroExp;
-	}
-
-	public int getNumNonPromoterMbsMutations() {
-		return numNonPromoterMbsMutations;
-	}
-
-	public void setNumNonPromoterMbsMutations(int numNonPromoterMbsMutations) {
-		this.numNonPromoterMbsMutations = numNonPromoterMbsMutations;
-	}
-
-	public int getNumPromoterMbsMutations() {
-		return numPromoterMbsMutations;
-	}
-
-	public void setNumPromoterMbsMutations(int numPromoterMbsMutations) {
-		this.numPromoterMbsMutations = numPromoterMbsMutations;
-	}
-
-	public int getNumPromoterMbsMutationsHighExp() {
-		return numPromoterMbsMutationsHighExp;
-	}
-
-	public void setNumPromoterMbsMutationsHighExp(int numPromoterMbsMutationsHighExp) {
-		this.numPromoterMbsMutationsHighExp = numPromoterMbsMutationsHighExp;
-	}
-
-	public int getNumPromoterMbsMutationsMidExp() {
-		return numPromoterMbsMutationsMidExp;
-	}
-
-	public void setNumPromoterMbsMutationsMidExp(int numPromoterMbsMutationsMidExp) {
-		this.numPromoterMbsMutationsMidExp = numPromoterMbsMutationsMidExp;
-	}
-
-	public int getNumPromoterMbsMutationsLowExp() {
-		return numPromoterMbsMutationsLowExp;
-	}
-
-	public void setNumPromoterMbsMutationsLowExp(int numPromoterMbsMutationsLowExp) {
-		this.numPromoterMbsMutationsLowExp = numPromoterMbsMutationsLowExp;
-	}
-
-	public int getNumPromoterMbsMutationsZeroExp() {
-		return numPromoterMbsMutationsZeroExp;
-	}
-
-	public void setNumPromoterMbsMutationsZeroExp(int numPromoterMbsMutationsZeroExp) {
-		this.numPromoterMbsMutationsZeroExp = numPromoterMbsMutationsZeroExp;
-	}
-
-	public int getNumNonCfsMutations() {
-		return numNonCfsMutations;
-	}
-
-	public void setNumNonCfsMutations(int numNonCfsMutations) {
-		this.numNonCfsMutations = numNonCfsMutations;
-	}
-
-	public int getNumCfsMutations() {
-		return numCfsMutations;
-	}
-
-	public void setNumCfsMutations(int numCfsMutations) {
-		this.numCfsMutations = numCfsMutations;
-	}
-
-	public int getNumNonCfsSbsMutations() {
-		return numNonCfsSbsMutations;
-	}
-
-	public void setNumNonCfsSbsMutations(int numNonCfsSbsMutations) {
-		this.numNonCfsSbsMutations = numNonCfsSbsMutations;
-	}
-
-	public int getNumCfsSbsMutations() {
-		return numCfsSbsMutations;
-	}
-
-	public void setNumCfsSbsMutations(int numCfsSbsMutations) {
-		this.numCfsSbsMutations = numCfsSbsMutations;
-	}
-
-	public int getNumNonCfsIndelMutations() {
-		return numNonCfsIndelMutations;
-	}
-
-	public void setNumNonCfsIndelMutations(int numNonCfsIndelMutations) {
-		this.numNonCfsIndelMutations = numNonCfsIndelMutations;
-	}
-
-	public int getNumCfsIndelMutations() {
-		return numCfsIndelMutations;
-	}
-
-	public void setNumCfsIndelMutations(int numCfsIndelMutations) {
-		this.numCfsIndelMutations = numCfsIndelMutations;
-	}
-
-	public int getNumNonCfsMbsMutations() {
-		return numNonCfsMbsMutations;
-	}
-
-	public void setNumNonCfsMbsMutations(int numNonCfsMbsMutations) {
-		this.numNonCfsMbsMutations = numNonCfsMbsMutations;
-	}
-
-	public int getNumCfsMbsMutations() {
-		return numCfsMbsMutations;
-	}
-
-	public void setNumCfsMbsMutations(int numCfsMbsMutations) {
-		this.numCfsMbsMutations = numCfsMbsMutations;
-	}
 	
 	public String getLine() {
 		List<Integer> lineElements = new ArrayList<>();
@@ -515,6 +258,9 @@ public class OutputStats {
 		lineElements.add(numSpecimensWithBoth);
 		
 		lineElements.add(numMutations);
+		lineElements.add(numSbsMutations);
+		lineElements.add(numIndelMutations);
+		lineElements.add(numMbsMutations);
 		
 		lineElements.add(numNonPromoterMutations);
 		lineElements.add(numPromoterMutations);

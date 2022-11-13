@@ -7,7 +7,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
-import org.apache.commons.collections4.MapUtils;
 import org.coh.mattiyeh.datacruncher.math.Functions;
 import org.coh.mattiyeh.datacruncher.math.Operator;
 
@@ -94,9 +93,15 @@ public class Sample {
 					mutationsToReturn.add(mutation);
 				} else {
 					mutation.getGeneIdsAffected().forEach(geneId -> {
-						// Is gene highly expressed? ... or whatever the operator calls for
-						if (op.apply(expressionSample.getGeneNormExpressionLevelLog(geneId), expressionCutoff)) {
-							mutationsToReturn.add(mutation);
+						
+						// Make sure we have expression data for this gene:
+						if (expressionSample.hasExpressionForGene(geneId)) {
+							
+							// Is gene highly expressed? ... or whatever the operator calls for
+							if (op.apply(expressionSample.getGeneNormExpressionLevelLog(geneId), expressionCutoff)) {
+								mutationsToReturn.add(mutation);
+							}
+							
 						}
 					});
 				}
@@ -106,6 +111,10 @@ public class Sample {
 		});
 
 		return mutationsToReturn;
+	}
+
+	private boolean hasExpressionForGene(String geneId) {
+		return geneNormExpressionLevels.containsKey(geneId);
 	}
 
 	private boolean checkRange(MutationRange mutationRange, Mutation mutation) {
@@ -129,7 +138,7 @@ public class Sample {
 	}
 
 	public Double getGeneNormExpressionLevelLog(String geneId) {
-		return Functions.safeLogTransform(MapUtils.getFloat(geneNormExpressionLevels, geneId, 0f));
+		return Functions.safeLogTransform(geneNormExpressionLevels.get(geneId));
 	}
 
 	public List<Double> getGeneNormExpressionLevelLogValues() {

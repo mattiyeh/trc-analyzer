@@ -16,7 +16,10 @@ public class OutputManager {
 		metadataHeaderItems.add("spec_w_exp");
 		metadataHeaderItems.add("spec_w_both");
 		
-		metadataHeaderItems.add("all_muts");
+		metadataHeaderItems.add("muts");
+		metadataHeaderItems.add("sbs_muts");
+		metadataHeaderItems.add("indel_muts");
+		metadataHeaderItems.add("mbs_muts");
 		
 		metadataHeaderItems.add("non_prom_muts");
 		metadataHeaderItems.add("prom_muts");
