@@ -77,7 +77,7 @@ public class DataCruncher {
 		
 		try (BufferedWriter summaryBw = Files.newBufferedWriter(summaryPath)) {
 
-			List<String> metadataHeaderItems = om.getMetadataHeaderItems();
+			List<String> metadataHeaderItems = new ArrayList<>(om.getMetadataHeaderItems());
 			metadataHeaderItems.remove(0);
 			metadataHeaderItems.add(0, "tumor_type");
 			writeLine(summaryBw, StringUtils.join(metadataHeaderItems, '\t'));
