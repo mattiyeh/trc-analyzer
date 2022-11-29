@@ -5,7 +5,7 @@ import java.util.List;
 
 public class OutputManager {
 	
-	private List<String> metadataHeaderItems;
+	private final List<String> metadataHeaderItems;
 	
 	public OutputManager(int highCutoff, int lowCutoff) {
 		metadataHeaderItems = new ArrayList<>();
@@ -59,7 +59,7 @@ public class OutputManager {
 	}
 	
 	public List<String> getMetadataHeaderItems() {
-		return metadataHeaderItems;
+		return new ArrayList<>(metadataHeaderItems);
 	}
 
 }
