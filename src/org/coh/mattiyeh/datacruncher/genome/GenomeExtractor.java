@@ -4,8 +4,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 
-import org.apache.commons.lang3.StringUtils;
-
 import htsjdk.samtools.reference.FastaSequenceIndex;
 import htsjdk.samtools.reference.IndexedFastaSequenceFile;
 import htsjdk.samtools.reference.ReferenceSequence;
@@ -60,27 +58,6 @@ public class GenomeExtractor {
 	 */
 	public boolean contigExistsInIndex(String chr) {
 		return fastAIndex.hasIndexEntry(chr);
-	}
-
-	/**
-	 * @param str
-	 * @return
-	 */
-	public String getReverseComplement(String str) {
-		return StringUtils.reverse(StringUtils.replaceChars(str, "ACGT", "TGCA"));
-	}
-
-	/**
-	 * @param triSeq
-	 * @return
-	 */
-	public TriSeq getReverseComplement(TriSeq triSeq) {
-		String preBase = getReverseComplement(triSeq.getPreBase());
-		String refBase = getReverseComplement(triSeq.getRefBase());
-		String postBase = getReverseComplement(triSeq.getPostBase());
-
-		// Return reversed
-		return new TriSeq(postBase, refBase, preBase);
 	}
 
 	/**

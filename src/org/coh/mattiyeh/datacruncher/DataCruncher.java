@@ -29,6 +29,7 @@ import org.apache.commons.csv.CSVRecord;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.coh.mattiyeh.datacruncher.genome.GenomeExtractor;
+import org.coh.mattiyeh.datacruncher.genome.SbsStats;
 import org.coh.mattiyeh.datacruncher.genome.TriSeq;
 import org.coh.mattiyeh.datacruncher.math.Operator;
 import org.coh.mattiyeh.datacruncher.model.DnaRange;
@@ -77,10 +78,8 @@ public class DataCruncher {
 		
 		try (BufferedWriter summaryBw = Files.newBufferedWriter(summaryPath)) {
 
-			List<String> metadataHeaderItems = om.getMetadataHeaderItems();
-			metadataHeaderItems.remove(0);
-			metadataHeaderItems.add(0, "tumor_type");
-			writeLine(summaryBw, StringUtils.join(metadataHeaderItems, '\t'));
+			List<String> summaryHeaderItems = om.getSummaryHeaderItems();
+			writeLine(summaryBw, StringUtils.join(summaryHeaderItems, '\t'));
 			
 			for (int i = 0; i < Constants.TUMOR_TYPES.length; i++) {
 
@@ -300,7 +299,7 @@ public class DataCruncher {
 				newMutation.addRawLine(StringUtils.join(tsvRecord.toList(), '\t'));
 
 				if (Constants.SBS.equals(mutationType)) {
-					TriSeq triSeq = ge.getTrinucleotideContext(chr, start);
+					TriSeq triSeq = ge.getTrinucleotideContext(chr, start);					
 					newMutation.setTriSeq(triSeq);
 				}
 
@@ -408,41 +407,41 @@ public class DataCruncher {
 		Path metadataPath = outputFolderPath.resolve(tumorType + "_metadata.tsv");
 		
 		Path mutationPath = outputFolderPath.resolve(tumorType + "_mutations.tsv");
-		Path sbsMutationPath = outputFolderPath.resolve(tumorType + "_sbs_mutations.tsv");
-		Path indelMutationPath = outputFolderPath.resolve(tumorType + "_indel_mutations.tsv");
-		Path mbsMutationPath = outputFolderPath.resolve(tumorType + "_mbs_mutations.tsv");
+		Path sbsMutationsPath = outputFolderPath.resolve(tumorType + "_sbs_mutations.tsv");
+		Path indelMutationsPath = outputFolderPath.resolve(tumorType + "_indel_mutations.tsv");
+		Path mbsMutationsPath = outputFolderPath.resolve(tumorType + "_mbs_mutations.tsv");
 		
 		// PROMOTER
 		
-		Path nonPromoterMutationPath = promoterPath.resolve(tumorType + "_non_promoter_mutations.tsv");
-		Path promoterMutationPath = promoterPath.resolve(tumorType + "_promoter_mutations.tsv");
+		Path nonPromoterMutationsPath = promoterPath.resolve(tumorType + "_non_promoter_mutations.tsv");
+		Path promoterMutationsPath = promoterPath.resolve(tumorType + "_promoter_mutations.tsv");
 		
 		// PROMOTER-SBS
 		
-		Path nonPromoterSbsMutationPath = promoterSbsPath.resolve(tumorType + "_non_promoter_sbs_mutations.tsv");
-		Path promoterSbsMutationPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations.tsv");		
-		Path promoterSbsMutationHighPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations_high.tsv");		
-		Path promoterSbsMutationMidPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations_mid.tsv");		
-		Path promoterSbsMutationLowPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations_low.tsv");		
-		Path promoterSbsMutationZeroPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations_zero.tsv");		
+		Path nonPromoterSbsMutationsPath = promoterSbsPath.resolve(tumorType + "_non_promoter_sbs_mutations.tsv");
+		Path promoterSbsMutationsPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations.tsv");			
+		Path promoterSbsMutationsHighPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations_high.tsv");
+		Path promoterSbsMutationsMidPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations_mid.tsv");		
+		Path promoterSbsMutationsLowPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations_low.tsv");		
+		Path promoterSbsMutationsZeroPath = promoterSbsPath.resolve(tumorType + "_promoter_sbs_mutations_zero.tsv");		
 		
 		// PROMOTER-INDEL
 		
-		Path nonPromoterIndelMutationPath = promoterIndelPath.resolve(tumorType + "_non_promoter_indel_mutations.tsv");
-		Path promoterIndelMutationPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations.tsv");		
-		Path promoterIndelMutationHighPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations_high.tsv");		
-		Path promoterIndelMutationMidPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations_mid.tsv");		
-		Path promoterIndelMutationLowPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations_low.tsv");		
-		Path promoterIndelMutationZeroPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations_zero.tsv");		
+		Path nonPromoterIndelMutationsPath = promoterIndelPath.resolve(tumorType + "_non_promoter_indel_mutations.tsv");
+		Path promoterIndelMutationsPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations.tsv");		
+		Path promoterIndelMutationsHighPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations_high.tsv");		
+		Path promoterIndelMutationsMidPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations_mid.tsv");		
+		Path promoterIndelMutationsLowPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations_low.tsv");		
+		Path promoterIndelMutationsZeroPath = promoterIndelPath.resolve(tumorType + "_promoter_indel_mutations_zero.tsv");		
 			
 		// PROMOTER-MBS
 		
-		Path nonPromoterMbsMutationPath = promoterMbsPath.resolve(tumorType + "_non_promoter_mbs_mutations.tsv");
-		Path promoterMbsMutationPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations.tsv");		
-		Path promoterMbsMutationHighPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations_high.tsv");		
-		Path promoterMbsMutationMidPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations_mid.tsv");		
-		Path promoterMbsMutationLowPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations_low.tsv");		
-		Path promoterMbsMutationZeroPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations_zero.tsv");		
+		Path nonPromoterMbsMutationsPath = promoterMbsPath.resolve(tumorType + "_non_promoter_mbs_mutations.tsv");
+		Path promoterMbsMutationsPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations.tsv");		
+		Path promoterMbsMutationsHighPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations_high.tsv");		
+		Path promoterMbsMutationsMidPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations_mid.tsv");		
+		Path promoterMbsMutationsLowPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations_low.tsv");		
+		Path promoterMbsMutationsZeroPath = promoterMbsPath.resolve(tumorType + "_promoter_mbs_mutations_zero.tsv");		
 		
 		// CFS
 		
@@ -467,33 +466,33 @@ public class DataCruncher {
 		try (BufferedWriter metadataBw = Files.newBufferedWriter(metadataPath);
 				
 				BufferedWriter mutsBw = Files.newBufferedWriter(mutationPath);
-				BufferedWriter sbsMutsBw = Files.newBufferedWriter(sbsMutationPath);
-				BufferedWriter indelMutsBw = Files.newBufferedWriter(indelMutationPath);
-				BufferedWriter mbsMutsBw = Files.newBufferedWriter(mbsMutationPath);
+				BufferedWriter sbsMutsBw = Files.newBufferedWriter(sbsMutationsPath);
+				BufferedWriter indelMutsBw = Files.newBufferedWriter(indelMutationsPath);
+				BufferedWriter mbsMutsBw = Files.newBufferedWriter(mbsMutationsPath);
 				
-				BufferedWriter nonPromMutsBw = Files.newBufferedWriter(nonPromoterMutationPath);
-				BufferedWriter promMutsBw = Files.newBufferedWriter(promoterMutationPath);
+				BufferedWriter nonPromMutsBw = Files.newBufferedWriter(nonPromoterMutationsPath);
+				BufferedWriter promMutsBw = Files.newBufferedWriter(promoterMutationsPath);
 				
-				BufferedWriter nonPromSbsMutsBw = Files.newBufferedWriter(nonPromoterSbsMutationPath);
-				BufferedWriter promSbsMutsBw = Files.newBufferedWriter(promoterSbsMutationPath);
-				BufferedWriter promSbsMutsHighBw = Files.newBufferedWriter(promoterSbsMutationHighPath);
-				BufferedWriter promSbsMutsMidBw = Files.newBufferedWriter(promoterSbsMutationMidPath);
-				BufferedWriter promSbsMutsLowBw = Files.newBufferedWriter(promoterSbsMutationLowPath);
-				BufferedWriter promSbsMutsZeroBw = Files.newBufferedWriter(promoterSbsMutationZeroPath);
+				BufferedWriter nonPromSbsMutsBw = Files.newBufferedWriter(nonPromoterSbsMutationsPath);
+				BufferedWriter promSbsMutsBw = Files.newBufferedWriter(promoterSbsMutationsPath);
+				BufferedWriter promSbsMutsHighBw = Files.newBufferedWriter(promoterSbsMutationsHighPath);
+				BufferedWriter promSbsMutsMidBw = Files.newBufferedWriter(promoterSbsMutationsMidPath);
+				BufferedWriter promSbsMutsLowBw = Files.newBufferedWriter(promoterSbsMutationsLowPath);
+				BufferedWriter promSbsMutsZeroBw = Files.newBufferedWriter(promoterSbsMutationsZeroPath);
 				
-				BufferedWriter nonPromIndelMutsBw = Files.newBufferedWriter(nonPromoterIndelMutationPath);
-				BufferedWriter promIndelMutsBw = Files.newBufferedWriter(promoterIndelMutationPath);
-				BufferedWriter promIndelMutsHighBw = Files.newBufferedWriter(promoterIndelMutationHighPath);
-				BufferedWriter promIndelMutsMidBw = Files.newBufferedWriter(promoterIndelMutationMidPath);
-				BufferedWriter promIndelMutsLowBw = Files.newBufferedWriter(promoterIndelMutationLowPath);
-				BufferedWriter promIndelMutsZeroBw = Files.newBufferedWriter(promoterIndelMutationZeroPath);
+				BufferedWriter nonPromIndelMutsBw = Files.newBufferedWriter(nonPromoterIndelMutationsPath);
+				BufferedWriter promIndelMutsBw = Files.newBufferedWriter(promoterIndelMutationsPath);
+				BufferedWriter promIndelMutsHighBw = Files.newBufferedWriter(promoterIndelMutationsHighPath);
+				BufferedWriter promIndelMutsMidBw = Files.newBufferedWriter(promoterIndelMutationsMidPath);
+				BufferedWriter promIndelMutsLowBw = Files.newBufferedWriter(promoterIndelMutationsLowPath);
+				BufferedWriter promIndelMutsZeroBw = Files.newBufferedWriter(promoterIndelMutationsZeroPath);
 				
-				BufferedWriter nonPromMbsMutsBw = Files.newBufferedWriter(nonPromoterMbsMutationPath);
-				BufferedWriter promMbsMutsBw = Files.newBufferedWriter(promoterMbsMutationPath);
-				BufferedWriter promMbsMutsHighBw = Files.newBufferedWriter(promoterMbsMutationHighPath);
-				BufferedWriter promMbsMutsMidBw = Files.newBufferedWriter(promoterMbsMutationMidPath);
-				BufferedWriter promMbsMutsLowBw = Files.newBufferedWriter(promoterMbsMutationLowPath);
-				BufferedWriter promMbsMutsZeroBw = Files.newBufferedWriter(promoterMbsMutationZeroPath);
+				BufferedWriter nonPromMbsMutsBw = Files.newBufferedWriter(nonPromoterMbsMutationsPath);
+				BufferedWriter promMbsMutsBw = Files.newBufferedWriter(promoterMbsMutationsPath);
+				BufferedWriter promMbsMutsHighBw = Files.newBufferedWriter(promoterMbsMutationsHighPath);
+				BufferedWriter promMbsMutsMidBw = Files.newBufferedWriter(promoterMbsMutationsMidPath);
+				BufferedWriter promMbsMutsLowBw = Files.newBufferedWriter(promoterMbsMutationsLowPath);
+				BufferedWriter promMbsMutsZeroBw = Files.newBufferedWriter(promoterMbsMutationsZeroPath);
 				
 				BufferedWriter nonCfsMutsBw = Files.newBufferedWriter(nonCfsMutationsPath);
 				BufferedWriter cfsMutsBw = Files.newBufferedWriter(cfsMutationsPath);
@@ -638,7 +637,7 @@ public class DataCruncher {
 				
 				Set<Mutation> nonCfsMbsMutations = donor.getMutations(MutationRange.NONCFS, MutationType.MBS);
 				Set<Mutation> cfsMbsMutations = donor.getMutations(MutationRange.CFS, MutationType.MBS);
-				
+								
 				os.addNumSpecimens(donor.getNumSpecimens());
 				os.addNumSamples(donor.getNumSamples());
 				os.addNumSpecimensWithMutationData(donor.getNumSpecimensWithMutationData());
@@ -695,6 +694,15 @@ public class DataCruncher {
 				
 				metadataBw.write("\t" + mutations.size());
 				metadataBw.write("\t" + sbsMutations.size());
+				
+				SbsStats sbsMutationCounts = countSbsNumbers(sbsMutations);
+				metadataBw.write("\t" + sbsMutationCounts.getNumCToT());
+				metadataBw.write("\t" + sbsMutationCounts.getNumCToA());
+				metadataBw.write("\t" + sbsMutationCounts.getNumCToG());
+				metadataBw.write("\t" + sbsMutationCounts.getNumTToC());
+				metadataBw.write("\t" + sbsMutationCounts.getNumTToA());
+				metadataBw.write("\t" + sbsMutationCounts.getNumTToG());
+				
 				metadataBw.write("\t" + indelMutations.size());
 				metadataBw.write("\t" + mbsMutations.size());
 				
@@ -703,7 +711,25 @@ public class DataCruncher {
 				
 				metadataBw.write("\t" + nonPromoterSbsMutations.size());
 				metadataBw.write("\t" + promoterSbsMutations.size());
+				
+				SbsStats promoterSbsMutationCounts = countSbsNumbers(promoterSbsMutations);
+				metadataBw.write("\t" + promoterSbsMutationCounts.getNumCToT());
+				metadataBw.write("\t" + promoterSbsMutationCounts.getNumCToA());
+				metadataBw.write("\t" + promoterSbsMutationCounts.getNumCToG());
+				metadataBw.write("\t" + promoterSbsMutationCounts.getNumTToC());
+				metadataBw.write("\t" + promoterSbsMutationCounts.getNumTToA());
+				metadataBw.write("\t" + promoterSbsMutationCounts.getNumTToG());
+				
 				metadataBw.write("\t" + promoterSbsMutationsInHighExpressedGenes.size());
+				
+				SbsStats promoterSbsMutationCountsInHighExpressedGenes = countSbsNumbers(promoterSbsMutationsInHighExpressedGenes);
+				metadataBw.write("\t" + promoterSbsMutationCountsInHighExpressedGenes.getNumCToT());
+				metadataBw.write("\t" + promoterSbsMutationCountsInHighExpressedGenes.getNumCToA());
+				metadataBw.write("\t" + promoterSbsMutationCountsInHighExpressedGenes.getNumCToG());
+				metadataBw.write("\t" + promoterSbsMutationCountsInHighExpressedGenes.getNumTToC());
+				metadataBw.write("\t" + promoterSbsMutationCountsInHighExpressedGenes.getNumTToA());
+				metadataBw.write("\t" + promoterSbsMutationCountsInHighExpressedGenes.getNumTToG());
+				
 				metadataBw.write("\t" + promoterSbsMutationsInMidExpressedGenes.size());
 				metadataBw.write("\t" + promoterSbsMutationsInLowExpressedGenes.size());
 				metadataBw.write("\t" + promoterSbsMutationsInZeroExpressedGenes.size());
@@ -812,7 +838,7 @@ public class DataCruncher {
 			bw.write(mutation.getFirstRawLine());
 			
 			// Add three-base data to end of line
-			bw.write("\t" + mutation.getTriSeqWithMut());
+			bw.write("\t" + mutation.getTriSeqWithMutForSigs());
 			
 			// Concatenate genes affected and put it in last column
 			bw.write("\t" + mutation.getNumGeneIdsAffected());
@@ -894,6 +920,50 @@ public class DataCruncher {
 		});
 
 		return fragileSitesByChr;
+	}
+	
+	private SbsStats countSbsNumbers(Set<Mutation> mutations) {
+		SbsStats sbsStats = new SbsStats();
+		
+		mutations.forEach(mutation -> {
+			if (!MutationType.SBS.equals(mutation.getType())) {
+				return;
+			}
+			
+			String triSeqWithMutForSigs = mutation.getTriSeqWithMutForSigs();
+			// T:T[C>T]G
+			String substitution = triSeqWithMutForSigs.substring(4, 7);
+			switch (substitution) {
+			case "C>T": {
+				sbsStats.incrementCToT();
+				break;
+			}
+			case "C>A": {
+				sbsStats.incrementCToA();
+				break;
+			}
+			case "C>G": {
+				sbsStats.incrementCToG();
+				break;
+			}
+			case "T>C": {
+				sbsStats.incrementTToC();
+				break;
+			}
+			case "T>A": {
+				sbsStats.incrementTToA();
+				break;
+			}
+			case "T>G": {
+				sbsStats.incrementTToG();
+				break;
+			}
+			default:
+				throw new IllegalArgumentException("Unexpected value: " + substitution);
+			}
+		});
+		
+		return sbsStats;
 	}
 
 }

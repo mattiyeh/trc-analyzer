@@ -7,6 +7,7 @@ import java.util.Objects;
 
 import org.apache.commons.lang3.StringUtils;
 import org.coh.mattiyeh.datacruncher.Constants;
+import org.coh.mattiyeh.datacruncher.genome.GenomeUtils;
 import org.coh.mattiyeh.datacruncher.genome.TriSeq;
 
 public class Mutation implements Serializable, Comparable<Mutation> {
@@ -33,7 +34,7 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 	private List<MutationEffect> mutationEffects;
 
 	private TriSeq triSeq;
-
+	
 	private boolean inPromoterRegion;
 	private boolean inCfsRegion;
 
@@ -108,7 +109,7 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 	public void setTriSeq(TriSeq triSeq) {
 		this.triSeq = triSeq;
 	}
-
+	
 	public String getChr() {
 		return chr;
 	}
@@ -198,13 +199,46 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 		}
 		return StringUtils.EMPTY;
 	}
-
+	
 	public String getTriSeqWithMut() {
 		if (triSeq == null) {
 			return StringUtils.EMPTY;
 		}
+		
 		String change = "T:" + triSeq.getPreBase() + "[" + triSeq.getRefBase() + ">" + mutBase + "]"
 				+ triSeq.getPostBase();
+		
+		return change.toUpperCase();
+	}
+	
+	public String getTriSeqWithMutForSigs() {
+		if (triSeq == null) {
+			return StringUtils.EMPTY;
+		}
+		
+		// If it's already in good form, then return the original function
+		if ("C".equals(refBase) || "T".equals(refBase)) {
+			return getTriSeqWithMut();
+		}
+		
+		// Prebase and postbase are SWITCHED since it's the complement strand and it's
+		// read backwards
+		// E.g. C[G>A]T becomes A[C>T]G
+		String preBaseToWrite = triSeq.getPreBase();
+		String refBaseToWrite = refBase;
+		String mutBaseToWrite = mutBase;
+		String postBaseToWrite = triSeq.getPostBase();
+
+		// Need to get reverse complement in order to turn A> and G> into C> and T>
+
+		preBaseToWrite = GenomeUtils.getReverseComplement(preBaseToWrite);
+		refBaseToWrite = GenomeUtils.getReverseComplement(refBaseToWrite);
+		mutBaseToWrite = GenomeUtils.getReverseComplement(mutBaseToWrite);
+		postBaseToWrite = GenomeUtils.getReverseComplement(postBaseToWrite);
+		
+		// NOT A TYPO. Read above.
+		String change = "T:" + postBaseToWrite + "[" + refBaseToWrite + ">" + mutBaseToWrite + "]" + preBaseToWrite;
+		
 		return change.toUpperCase();
 	}
 
