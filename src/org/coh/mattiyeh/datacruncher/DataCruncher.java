@@ -14,7 +14,6 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,8 +34,8 @@ import org.coh.mattiyeh.datacruncher.math.Operator;
 import org.coh.mattiyeh.datacruncher.model.DnaRange;
 import org.coh.mattiyeh.datacruncher.model.Donor;
 import org.coh.mattiyeh.datacruncher.model.Gene;
-import org.coh.mattiyeh.datacruncher.model.GeneNaming;
 import org.coh.mattiyeh.datacruncher.model.Mutation;
+import org.coh.mattiyeh.datacruncher.model.MutationEffect;
 import org.coh.mattiyeh.datacruncher.model.MutationRange;
 import org.coh.mattiyeh.datacruncher.model.MutationType;
 import org.coh.mattiyeh.datacruncher.model.OutputStats;
@@ -160,8 +159,8 @@ public class DataCruncher {
 			// Reasons to skip specimens:
 			// type is normal or xenograft or cell line
 			// treatment is chemo or chemorads
-			if (validSpecimenType(specimenType) && validSpecimenSubType(specimenSubType)
-					&& validTreatmentType(donorTreatmentType)) {
+			if (isValidSpecimenType(specimenType) && isValidSpecimenSubType(specimenSubType)
+					&& isValidTreatmentType(donorTreatmentType)) {
 
 				Specimen specimen = new Specimen(specimenId, donorId, specimenType, specimenSubType,
 						donorTreatmentType);
@@ -197,7 +196,7 @@ public class DataCruncher {
 	 * @param donorTreatmentType
 	 * @return
 	 */
-	private boolean validTreatmentType(String donorTreatmentType) {
+	private boolean isValidTreatmentType(String donorTreatmentType) {
 		return !(donorTreatmentType.equals(Constants.CHEMOTHERAPY)
 				|| donorTreatmentType.equals(Constants.CHEMORADIATION));
 	}
@@ -208,7 +207,7 @@ public class DataCruncher {
 	 * @param specimenType
 	 * @return
 	 */
-	private boolean validSpecimenType(String specimenType) {
+	private boolean isValidSpecimenType(String specimenType) {
 		return specimenType.equals(Constants.PRIMARY);
 	}
 
@@ -218,7 +217,7 @@ public class DataCruncher {
 	 * @param specimenSubType
 	 * @return
 	 */
-	private boolean validSpecimenSubType(String specimenSubType) {
+	private boolean isValidSpecimenSubType(String specimenSubType) {
 		return specimenSubType.equals(Constants.SOLID_TISSUE)
 				|| specimenSubType.equals(Constants.ADDITIONAL_NEW_PRIMARY) || specimenSubType.equals(Constants.OTHER)
 				|| specimenSubType.equals(Constants.LYMPH_NODE);
@@ -231,7 +230,7 @@ public class DataCruncher {
 		Map<String, List<DnaRange>> cfsRegionsByChr = readFragileSites();
 
 		// Read in mutations
-		Set<String> previousMutationKeys = new HashSet<>();
+		Map<String, Mutation> previousMutations = new HashMap<>();
 
 		CSVParser csvParser = openMutationFile(tumorType);
 
@@ -252,52 +251,50 @@ public class DataCruncher {
 			int mutantAlleleReadCount = NumberUtils.toInt(tsvRecord.get("mutant_allele_read_count"));
 			String consequenceType = tsvRecord.get("consequence_type");
 			String geneAffected = tsvRecord.get("gene_affected");
+			String transcriptAffected = tsvRecord.get("transcript_affected");
 			String sequencingStrategy = tsvRecord.get(Constants.SEQUENCING_STRATEGY);
 
 			Donor donor = donors.get(donorId);
-
-			/*-
-			 * Skip this mutation if:
-			 * 
-			 * 1. Gene affected column is blank (e.g. intergenic mutation)
-			 * 2. Gene affected is not in GRch37 (hg19) Ensembl assembly
-			 * 3. Gene is NOT protein coding
-			 * 4. We threw out this specimen previously (see criteria in readSpecimensAndSamples)
-			 * 5. Not WGS
-			 */
-			if (StringUtils.isBlank(geneAffected) || !gm.geneInAssembly(geneAffected)
-					|| gm.getGene(geneAffected, GeneNaming.ID).isNotProteinCoding()
-					|| !donor.containsSpecimen(specimenId) || !Constants.WGS.equals(sequencingStrategy)) {
+			
+			// Skip mutation if specimen/sample didn't pass QC in readSpecimensAndSamples
+			// Skip this mutation if it's not from WGS
+			if (!donor.containsSpecimen(specimenId) || !Constants.WGS.equals(sequencingStrategy)) {
 				continue;
 			}
-
+			
+			/*-
+			 * This mutation is VALID if:
+			 * 
+			 * 1. Gene affected column is not blank (e.g. intergenic mutation)
+			 * 2. Gene affected is in GRch37 (hg19) Ensembl assembly
+			 * 3. Gene is protein coding
+			 */
+			boolean isProteinCoding = gm.isGeneInAssembly(geneAffected) && gm.getGeneByGeneId(geneAffected).isProteinCoding();
+			
+			String rawLine = StringUtils.join(tsvRecord.toList(), '\t');
+			MutationEffect mutationEffect = new MutationEffect(consequenceType, geneAffected, transcriptAffected, isProteinCoding, rawLine);
+			
 			// Can't just use mutation ID from the data because it is NOT unique (e.g. same
 			// mutation id used in different samples)
+			// e.g. in bladder: mutation ID MU1066994
 			String mutationKey = new StringBuffer().append(mutationId).append(donorId).append(specimenId)
 					.append(sampleId).append(chr).append(start).append(end).append(refBase).append(mutBase).toString();
 			
-			Sample sample = donor.getSpecimen(specimenId).getSample(sampleId);
-
-			// Check to see if we've seen this mutation for this sample before (ie.
-			// different consequence or gene affected)
-			if (previousMutationKeys.contains(mutationKey)) {
-
-				Mutation oldMutation = sample.getMutation(mutationId);
-
+			if (previousMutations.containsKey(mutationKey)) {
+				Mutation previousMutation = previousMutations.get(mutationKey);
+				
 				// Check to see if the previously seen mutation already covered this gene
-				if (!oldMutation.affectsGene(geneAffected)) {
-					oldMutation.addMutationEffect(consequenceType, geneAffected);
-					oldMutation.addRawLine(StringUtils.join(tsvRecord.toList(), '\t'));
+				// Note: this could potentially throw out different affected transcripts if they
+				// affect same gene
+				if (!previousMutation.affectsGene(geneAffected)) {
+					previousMutation.addMutationEffect(mutationEffect);
 				}
-
 			} else {
-
 				Mutation newMutation = new Mutation(mutationId, donorId, specimenId, sampleId, matchedSampleId,
 						mutationType, chr, start, end, refBase, mutBase, totalReadCount, mutantAlleleReadCount,
-						sequencingStrategy, consequenceType, geneAffected);
-
-				newMutation.addRawLine(StringUtils.join(tsvRecord.toList(), '\t'));
-
+						sequencingStrategy);
+				newMutation.addMutationEffect(mutationEffect);
+				
 				if (Constants.SBS.equals(mutationType)) {
 					TriSeq triSeq = ge.getTrinucleotideContext(chr, start);					
 					newMutation.setTriSeq(triSeq);
@@ -308,7 +305,7 @@ public class DataCruncher {
 				List<DnaRange> promoterRanges = MapUtils.getObject(promoterRegionsByChr, chr, new ArrayList<>());
 				for (DnaRange promoterRange : promoterRanges) {
 					if (promoterRange.overlaps(start, end)) {
-						newMutation.setInPromoterRegion(true);
+						newMutation.setIsInPromoterRegion(true);
 
 						// No need to keep checking the rest of the promoter ranges
 						break;
@@ -319,18 +316,19 @@ public class DataCruncher {
 				List<DnaRange> cfsRanges = MapUtils.getObject(cfsRegionsByChr, chr, new ArrayList<>());
 				for (DnaRange cfsRange : cfsRanges) {
 					if (cfsRange.overlaps(start, end)) {
-						newMutation.setInCfsRegion(true);
+						newMutation.setIsInCfsRegion(true);
 
 						// No need to keep checking the rest of the CFS ranges
 						break;
 					}
 				}
-
-				previousMutationKeys.add(mutationKey);
-
+				
+				previousMutations.put(mutationKey, newMutation);
+				
+				Sample sample = donor.getSpecimen(specimenId).getSample(sampleId);
 				sample.addMutation(newMutation);
-
 			}
+			
 		}
 		csvParser.close();
 	}
@@ -342,7 +340,7 @@ public class DataCruncher {
 	private void readExpressionLevels(String tumorType, Map<String, Donor> donors) throws IOException {
 
 		Path icgcDir = Paths.get(Constants.WORKING_ICGC_DIR);
-		File expressionFile = icgcDir.resolve(tumorType).resolve("exp_seq.tsv.gz").toFile();
+		File expressionFile = icgcDir.resolve(tumorType).resolve(Constants.EXPRESSIONS_FILENAME).toFile();
 
 		// check to make sure we have expression data for this tissue type
 		if (!expressionFile.exists()) {
@@ -362,8 +360,8 @@ public class DataCruncher {
 
 			// Check to make sure that geneId is the actual ENSG id and not the gene symbol
 			if (!geneId.startsWith("ENSG")) {
-				// Find the corresponding gene id
-				Gene gene = gm.getGene(geneId, GeneNaming.SYMBOL);
+				// Find the corresponding gene id using gene symbol to lookup
+				Gene gene = gm.getGeneByGeneSymbol(geneId);
 				if (gene == null) {
 					// This gene is not in our assembly. Skip.
 					continue;
@@ -388,6 +386,9 @@ public class DataCruncher {
 		final int lowCutoff = 25;
 		final int zeroCutoff = 0;
 		
+		Path unfilteredPath = outputFolderPath.resolve("unfiltered");
+		Files.createDirectory(unfilteredPath);
+		
 		Path promoterPath = outputFolderPath.resolve("promoter");
 		Path promoterSbsPath = promoterPath.resolve("sbs");
 		Path promoterIndelPath = promoterPath.resolve("indel");
@@ -405,6 +406,15 @@ public class DataCruncher {
 		Files.createDirectories(cfsMbsPath);
 		
 		Path metadataPath = outputFolderPath.resolve(tumorType + "_metadata.tsv");
+		
+		// UNFILTERED MUTATIONS
+		
+		Path unfilteredMutationsPath = unfilteredPath.resolve(tumorType + "_unfiltered.tsv");
+		Path unfilteredSbsMutationsPath = unfilteredPath.resolve(tumorType + "_sbs_unfiltered.tsv");
+		Path unfilteredIndelMutationsPath = unfilteredPath.resolve(tumorType + "_indel_unfiltered.tsv");
+		Path unfilteredMbsMutationsPath = unfilteredPath.resolve(tumorType + "_mbs_unfiltered.tsv");
+		
+		// VALID MUTATIONS
 		
 		Path mutationPath = outputFolderPath.resolve(tumorType + "_mutations.tsv");
 		Path sbsMutationsPath = outputFolderPath.resolve(tumorType + "_sbs_mutations.tsv");
@@ -465,6 +475,11 @@ public class DataCruncher {
 		
 		try (BufferedWriter metadataBw = Files.newBufferedWriter(metadataPath);
 				
+				BufferedWriter unfilteredMutsBw = Files.newBufferedWriter(unfilteredMutationsPath);
+				BufferedWriter unfilteredSbsMutsBw = Files.newBufferedWriter(unfilteredSbsMutationsPath);
+				BufferedWriter unfilteredIndelMutsBw = Files.newBufferedWriter(unfilteredIndelMutationsPath);
+				BufferedWriter unfilteredMbsMutsBw = Files.newBufferedWriter(unfilteredMbsMutationsPath);
+				
 				BufferedWriter mutsBw = Files.newBufferedWriter(mutationPath);
 				BufferedWriter sbsMutsBw = Files.newBufferedWriter(sbsMutationsPath);
 				BufferedWriter indelMutsBw = Files.newBufferedWriter(indelMutationsPath);
@@ -518,6 +533,11 @@ public class DataCruncher {
 			headerElements.add("all_genes_affected");
 			String header = StringUtils.join(headerElements, '\t');
 			
+			writeLine(unfilteredMutsBw, header);
+			writeLine(unfilteredSbsMutsBw, header);
+			writeLine(unfilteredIndelMutsBw, header);
+			writeLine(unfilteredMbsMutsBw, header);
+			
 			writeLine(mutsBw, header);
 			writeLine(sbsMutsBw, header);
 			writeLine(indelMutsBw, header);
@@ -569,6 +589,11 @@ public class DataCruncher {
 					continue;
 				}
 
+				Set<Mutation> unfilteredMutations = donor.getMutations(MutationRange.UNFILTERED, MutationType.ALL);
+				Set<Mutation> unfilteredSbsMutations = donor.getMutations(MutationRange.UNFILTERED, MutationType.SBS);
+				Set<Mutation> unfilteredIndelMutations = donor.getIndelMutations(MutationRange.UNFILTERED);
+				Set<Mutation> unfilteredMbsMutations = donor.getMutations(MutationRange.UNFILTERED, MutationType.MBS);
+				
 				Set<Mutation> mutations = donor.getMutations(MutationRange.NONE, MutationType.ALL);
 				Set<Mutation> sbsMutations = donor.getMutations(MutationRange.NONE, MutationType.SBS);
 				Set<Mutation> indelMutations = donor.getIndelMutations(MutationRange.NONE);
@@ -644,6 +669,11 @@ public class DataCruncher {
 				os.addNumSpecimensWithExpressionData(donor.getNumSpecimensWithExpressionData());
 				os.addNumSpecimensWithBoth(donor.getNumSpecimensWithBoth());
 				
+				os.addNumUnfilteredMutations(unfilteredMutations.size());
+				os.addNumSbsUnfilteredMutations(unfilteredSbsMutations.size());
+				os.addNumIndelUnfilteredMutations(unfilteredIndelMutations.size());
+				os.addNumMbsUnfilteredMutations(unfilteredMbsMutations.size());
+				
 				os.addNumMutations(mutations.size());
 				os.addNumSbsMutations(sbsMutations.size());
 				os.addNumIndelMutations(indelMutations.size());
@@ -691,6 +721,11 @@ public class DataCruncher {
 				metadataBw.write("\t" + donor.getNumSpecimensWithMutationData());
 				metadataBw.write("\t" + donor.getNumSpecimensWithExpressionData());
 				metadataBw.write("\t" + donor.getNumSpecimensWithBoth());
+				
+				metadataBw.write("\t" + unfilteredMutations.size());
+				metadataBw.write("\t" + unfilteredSbsMutations.size());
+				metadataBw.write("\t" + unfilteredIndelMutations.size());
+				metadataBw.write("\t" + unfilteredMbsMutations.size());
 				
 				metadataBw.write("\t" + mutations.size());
 				metadataBw.write("\t" + sbsMutations.size());
@@ -761,6 +796,15 @@ public class DataCruncher {
 				metadataBw.write("\t" + cfsMbsMutations.size());
 				
 				metadataBw.newLine();
+				
+				// UNFILTERED
+				
+				writeMutationsToFiles(unfilteredMutations, unfilteredMutsBw);
+				writeMutationsToFiles(unfilteredSbsMutations, unfilteredSbsMutsBw);
+				writeMutationsToFiles(unfilteredIndelMutations, unfilteredIndelMutsBw);
+				writeMutationsToFiles(unfilteredMbsMutations, unfilteredMbsMutsBw);
+				
+				// VALID
 				
 				writeMutationsToFiles(mutations, mutsBw);
 				writeMutationsToFiles(sbsMutations, sbsMutsBw);

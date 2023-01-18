@@ -5,6 +5,7 @@ import java.util.List;
 
 public class OutputManager {
 
+	private static final String PROM_SBS_MUTS_W_EXP_GTE = "prom_sbs_muts_w_exp_gte_";
 	private final List<String> metadataHeaderItems;
 	private final List<String> summaryHeaderItems;
 
@@ -17,6 +18,11 @@ public class OutputManager {
 		metadataHeaderItems.add("spec_w_exp");
 		metadataHeaderItems.add("spec_w_both");
 
+		metadataHeaderItems.add("unfiltered_muts");
+		metadataHeaderItems.add("unfiltered_sbs_muts");
+		metadataHeaderItems.add("unfiltered_indel_muts");
+		metadataHeaderItems.add("unfiltered_mbs_muts");
+		
 		metadataHeaderItems.add("muts");
 		metadataHeaderItems.add("sbs_muts");
 		metadataHeaderItems.add("sbs_muts_C_to_T");
@@ -39,13 +45,13 @@ public class OutputManager {
 		metadataHeaderItems.add("prom_sbs_muts_T_to_C");
 		metadataHeaderItems.add("prom_sbs_muts_T_to_A");
 		metadataHeaderItems.add("prom_sbs_muts_T_to_G");
-		metadataHeaderItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff);
-		metadataHeaderItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff + "_C_to_T");
-		metadataHeaderItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff + "_C_to_A");
-		metadataHeaderItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff + "_C_to_G");
-		metadataHeaderItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff + "_T_to_C");
-		metadataHeaderItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff + "_T_to_A");
-		metadataHeaderItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff + "_T_to_G");
+		metadataHeaderItems.add(PROM_SBS_MUTS_W_EXP_GTE + highCutoff);
+		metadataHeaderItems.add(PROM_SBS_MUTS_W_EXP_GTE + highCutoff + "_C_to_T");
+		metadataHeaderItems.add(PROM_SBS_MUTS_W_EXP_GTE + highCutoff + "_C_to_A");
+		metadataHeaderItems.add(PROM_SBS_MUTS_W_EXP_GTE + highCutoff + "_C_to_G");
+		metadataHeaderItems.add(PROM_SBS_MUTS_W_EXP_GTE + highCutoff + "_T_to_C");
+		metadataHeaderItems.add(PROM_SBS_MUTS_W_EXP_GTE + highCutoff + "_T_to_A");
+		metadataHeaderItems.add(PROM_SBS_MUTS_W_EXP_GTE + highCutoff + "_T_to_G");
 		metadataHeaderItems.add("prom_sbs_muts_w_exp_gt_" + lowCutoff + "_lt_" + highCutoff);
 		metadataHeaderItems.add("prom_sbs_muts_w_exp_lte_" + lowCutoff);
 		metadataHeaderItems.add("prom_sbs_muts_w_zero");
@@ -84,6 +90,11 @@ public class OutputManager {
 		summaryHeaderItems.add("spec_w_exp");
 		summaryHeaderItems.add("spec_w_both");
 
+		summaryHeaderItems.add("unfiltered_muts");
+		summaryHeaderItems.add("unfiltered_sbs_muts");
+		summaryHeaderItems.add("unfiltered_indel_muts");
+		summaryHeaderItems.add("unfiltered_mbs_muts");
+		
 		summaryHeaderItems.add("muts");
 		summaryHeaderItems.add("sbs_muts");
 		summaryHeaderItems.add("indel_muts");
@@ -94,7 +105,7 @@ public class OutputManager {
 
 		summaryHeaderItems.add("non_prom_sbs_muts");
 		summaryHeaderItems.add("prom_sbs_muts");
-		summaryHeaderItems.add("prom_sbs_muts_w_exp_gte_" + highCutoff);
+		summaryHeaderItems.add(PROM_SBS_MUTS_W_EXP_GTE + highCutoff);
 		summaryHeaderItems.add("prom_sbs_muts_w_exp_gt_" + lowCutoff + "_lt_" + highCutoff);
 		summaryHeaderItems.add("prom_sbs_muts_w_exp_lte_" + lowCutoff);
 		summaryHeaderItems.add("prom_sbs_muts_w_zero");

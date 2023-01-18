@@ -31,18 +31,16 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 	private int totalReadCount;
 	private int mutantAlleleReadCount;
 	private String sequencingStrategy;
-	private List<MutationEffect> mutationEffects;
+	private List<MutationEffect> mutationEffects = new ArrayList<>();
 
 	private TriSeq triSeq;
-	
-	private boolean inPromoterRegion;
-	private boolean inCfsRegion;
 
-	private List<String> rawLines;
+	private boolean isInPromoterRegion;
+	private boolean isInCfsRegion;
 
 	public Mutation(String mutationId, String donorId, String specimenId, String sampleId, String matchedSampleId,
 			String type, String chr, int start, int end, String refBase, String mutBase, int totalReadCount,
-			int mutantAlleleReadCount, String sequencingStrategy, String consequenceType, String geneAffected) {
+			int mutantAlleleReadCount, String sequencingStrategy) {
 
 		this.mutationId = mutationId;
 		this.donorId = donorId;
@@ -50,15 +48,13 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 		this.sampleId = sampleId;
 		this.matchedSampleId = matchedSampleId;
 
-		if (Constants.SBS.equals(type)) {
-			this.type = MutationType.SBS;
-		} else if (Constants.INSERTION.equals(type)) {
-			this.type = MutationType.INSERTION;
-		} else if (Constants.DELETION.equals(type)) {
-			this.type = MutationType.DELETION;
-		} else if (Constants.MBS.equals(type)) {
-			this.type = MutationType.MBS;
-		}
+		this.type = switch (type) {
+		case Constants.SBS			-> MutationType.SBS;
+		case Constants.INSERTION	-> MutationType.INSERTION;
+		case Constants.DELETION		-> MutationType.DELETION;
+		case Constants.MBS			-> MutationType.MBS;
+		default -> throw new IllegalStateException("Invalid type: " + type);
+		};
 
 		this.chr = chr;
 		this.start = start;
@@ -69,13 +65,9 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 		this.mutantAlleleReadCount = mutantAlleleReadCount;
 		this.sequencingStrategy = sequencingStrategy;
 
-		mutationEffects = new ArrayList<>();
-		mutationEffects.add(new MutationEffect(consequenceType, geneAffected));
+		isInPromoterRegion = false;
+		isInCfsRegion = false;
 
-		inPromoterRegion = false;
-		inCfsRegion = false;
-
-		this.rawLines = new ArrayList<>();
 	}
 
 	public String getMutationId() {
@@ -109,7 +101,7 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 	public void setTriSeq(TriSeq triSeq) {
 		this.triSeq = triSeq;
 	}
-	
+
 	public String getChr() {
 		return chr;
 	}
@@ -147,36 +139,58 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 	}
 
 	public boolean isInPromoterRegion() {
-		return inPromoterRegion;
+		return isInPromoterRegion;
 	}
 
-	public void setInPromoterRegion(boolean inPromoterRegion) {
-		this.inPromoterRegion = inPromoterRegion;
+	public void setIsInPromoterRegion(boolean isInPromoterRegion) {
+		this.isInPromoterRegion = isInPromoterRegion;
 	}
 
 	public boolean isInCfsRegion() {
-		return inCfsRegion;
+		return isInCfsRegion;
 	}
 
-	public void setInCfsRegion(boolean inCfsRegion) {
-		this.inCfsRegion = inCfsRegion;
+	public void setIsInCfsRegion(boolean isInCfsRegion) {
+		this.isInCfsRegion = isInCfsRegion;
 	}
 
-	public void addMutationEffect(String consequenceType, String geneAffected) {
-		mutationEffects.add(new MutationEffect(consequenceType, geneAffected));
+	public void addMutationEffect(MutationEffect mutationEffect) {
+		mutationEffects.add(mutationEffect);
 	}
 
 	public List<String> getGeneIdsAffected() {
 		List<String> genesAffected = new ArrayList<>();
-		mutationEffects.forEach(mutationEffect -> genesAffected.add(mutationEffect.getGeneAffected()));
+
+		getProteinCodingMutationEffects()
+				.forEach(mutationEffect -> genesAffected.add(mutationEffect.getGeneAffected()));
+
 		return genesAffected;
 	}
 	
-	public int getNumGeneIdsAffected() {
-		return getGeneIdsAffected().size();
+	private List<MutationEffect> getProteinCodingMutationEffects() {
+		List<MutationEffect> proteinCodingMutationEffects = new ArrayList<>();
+		for (MutationEffect mutationEffect : mutationEffects) {
+			if (mutationEffect.isProteinCoding()) {
+				proteinCodingMutationEffects.add(mutationEffect);
+			}
+		}
+		return proteinCodingMutationEffects;
+	}
+
+	public boolean affectsProteinCodingGene() {
+		for (MutationEffect mutationEffect : mutationEffects) {
+			if (mutationEffect.isProteinCoding()) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public boolean affectsGene(String geneId) {
+		if (StringUtils.isBlank(geneId)) {
+			return false;
+		}
+		
 		for (MutationEffect mutationEffect : mutationEffects) {
 			if (mutationEffect.getGeneAffected().equals(geneId)) {
 				return true;
@@ -185,42 +199,39 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 		return false;
 	}
 
-	public void addRawLine(String rawLine) {
-		rawLines.add(rawLine);
-	}
-
-	public List<String> getRawLines() {
-		return rawLines;
+	public int getNumGeneIdsAffected() {
+		return getGeneIdsAffected().size();
 	}
 	
 	public String getFirstRawLine() {
-		if (!rawLines.isEmpty()) {
-			return rawLines.get(0);
+		List<MutationEffect> proteinCodingMutationEffects = getProteinCodingMutationEffects();
+		if (proteinCodingMutationEffects.isEmpty()) {
+			return getMutationEffects().get(0).getRawLine(); 
 		}
-		return StringUtils.EMPTY;
+		return proteinCodingMutationEffects.get(0).getRawLine();
 	}
-	
+
 	public String getTriSeqWithMut() {
 		if (triSeq == null) {
 			return StringUtils.EMPTY;
 		}
-		
+
 		String change = "T:" + triSeq.getPreBase() + "[" + triSeq.getRefBase() + ">" + mutBase + "]"
 				+ triSeq.getPostBase();
-		
+
 		return change.toUpperCase();
 	}
-	
+
 	public String getTriSeqWithMutForSigs() {
 		if (triSeq == null) {
 			return StringUtils.EMPTY;
 		}
-		
+
 		// If it's already in good form, then return the original function
 		if ("C".equals(refBase) || "T".equals(refBase)) {
 			return getTriSeqWithMut();
 		}
-		
+
 		// Prebase and postbase are SWITCHED since it's the complement strand and it's
 		// read backwards
 		// E.g. C[G>A]T becomes A[C>T]G
@@ -235,10 +246,10 @@ public class Mutation implements Serializable, Comparable<Mutation> {
 		refBaseToWrite = GenomeUtils.getReverseComplement(refBaseToWrite);
 		mutBaseToWrite = GenomeUtils.getReverseComplement(mutBaseToWrite);
 		postBaseToWrite = GenomeUtils.getReverseComplement(postBaseToWrite);
-		
+
 		// NOT A TYPO. Read above.
 		String change = "T:" + postBaseToWrite + "[" + refBaseToWrite + ">" + mutBaseToWrite + "]" + preBaseToWrite;
-		
+
 		return change.toUpperCase();
 	}
 

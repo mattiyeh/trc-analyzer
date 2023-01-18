@@ -11,11 +11,17 @@ public class MutationEffect implements Serializable {
 
 	String consequenceType;
 	String geneAffected;
+	String transcriptAffected;
+	boolean proteinCoding;
+	String rawLine;
 
-	public MutationEffect(String consequenceType, String geneAffected) {
+	public MutationEffect(String consequenceType, String geneAffected, String transcriptAffected, boolean proteinCoding, String rawLine) {
 		super();
 		this.consequenceType = consequenceType;
 		this.geneAffected = geneAffected;
+		this.transcriptAffected = transcriptAffected;
+		this.proteinCoding = proteinCoding;
+		this.rawLine = rawLine;
 	}
 
 	public String getConsequenceType() {
@@ -24,6 +30,18 @@ public class MutationEffect implements Serializable {
 
 	public String getGeneAffected() {
 		return geneAffected;
+	}
+	
+	public String getTranscriptAffected() {
+		return transcriptAffected;
+	}
+	
+	public boolean isProteinCoding() {
+		return proteinCoding;
+	}
+	
+	public String getRawLine() {
+		return rawLine;
 	}
 
 	@Override

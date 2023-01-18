@@ -5,5 +5,6 @@ public enum MutationRange {
 	NONPROMOTER,
 	CFS,
 	NONCFS,
+	UNFILTERED,
 	NONE
 }

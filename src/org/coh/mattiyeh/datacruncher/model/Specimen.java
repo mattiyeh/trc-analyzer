@@ -15,7 +15,7 @@ public class Specimen {
 	String donorId;
 	String specimenType;
 	String specimenSubtype;
-	boolean tumorConfirmed;
+	boolean isTumorConfirmed;
 	String donorTreatmentType;
 
 	private Map<String, Sample> samples;
@@ -47,7 +47,7 @@ public class Specimen {
 	}
 
 	public boolean isTumorConfirmed() {
-		return tumorConfirmed;
+		return isTumorConfirmed;
 	}
 
 	public Sample getSample(String sampleId) {
@@ -75,6 +75,7 @@ public class Specimen {
 				return sample;
 			}
 		}
+		
 		return null;
 	}
 
@@ -116,24 +117,34 @@ public class Specimen {
 		Sample expressionSample = null;
 		double cutoff = 0;
 		
+		// Internal check to make sure at least one sample has mutation data
+		if (!hasMutationData()) {
+			return mutationsToReturn;
+		}
+		
 		if (useCutoff) {
 			
-			// Internal check to make sure at least one sample has mutation data and one
-			// sample has expression data (it may be the same sample!)
-			if (!hasMutationAndExpressionData()) {
+			// Internal check to make sure at least one sample has expression data (it
+			// doesn't have to be the same sample as mutation sample above!)
+			if (!hasExpressionData()) {
 				return mutationsToReturn;
 			}
 
 			// First calculate the cutoff using the expression Sample
 			expressionSample = getExpressionSample();
+			
 			if (expressionSample != null) {
 				if (nthPercentile == 0) {
 					cutoff = 0;
 				} else {
-					List<Double> geneNormExpressionLevelLogValues = expressionSample.getGeneNormExpressionLevelLogValues();
+					List<Double> geneNormExpressionLevelLogValues = expressionSample
+							.getGeneNormExpressionLevelLogValues();
 					cutoff = PercentileUtil.calculateNthPercentile(geneNormExpressionLevelLogValues, nthPercentile);
 				}
+			} else {
+				// TODO: throw exception if null?
 			}
+			
 		}
 		
 		// Now look for a sample with mutation data

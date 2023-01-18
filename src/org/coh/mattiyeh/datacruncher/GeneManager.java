@@ -4,10 +4,12 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVRecord;
+import org.apache.commons.lang3.StringUtils;
 import org.coh.mattiyeh.datacruncher.model.Gene;
 import org.coh.mattiyeh.datacruncher.model.GeneNaming;
 
@@ -52,9 +54,30 @@ public class GeneManager {
 			throw new IllegalArgumentException("Unexpected value: " + gn);
 		}
 	}
+	
+	public Gene getGeneByGeneId(String geneId) {
+		return getGene(geneId, GeneNaming.ID);
+	}
+	
+	public Gene getGeneByGeneSymbol(String geneSymbol) {
+		return getGene(geneSymbol, GeneNaming.SYMBOL);
+	}
 
-	public boolean geneInAssembly(String geneId) {
+	public boolean isGeneInAssembly(String geneId) {
+		if(StringUtils.isBlank(geneId)) {
+			return false;
+		}
+		
 		return genesByGeneIds.containsKey(geneId);
 	}
 
+	public boolean isAtLeastOneGeneInAssembly(List<String> geneIds) {
+		for (String geneId : geneIds) {
+			if (isGeneInAssembly(geneId)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
 }
