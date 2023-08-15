@@ -262,6 +262,11 @@ public class DataCruncher {
 				continue;
 			}
 			
+			// Skip mutation if specimen/sample didn't pass QC in readSpecimensAndSamples
+			//if (!donor.containsSpecimen(specimenId)) {
+			//	continue;
+			//}
+			
 			/*-
 			 * This mutation is VALID if:
 			 * 
@@ -585,6 +590,13 @@ public class DataCruncher {
 
 				// Only work with donors that have a specimen that has BOTH (based on discussion
 				// with Raoof on 5/8/2022)
+				
+				// All muts run: Temporarily change to just mutation data to get more mutation data (4/29/2023)
+				//if (!donor.hasMutationData()) {
+				//	continue;
+				//}
+				
+				// Normal run:
 				if (!donor.hasMutationAndExpressionData()) {
 					continue;
 				}

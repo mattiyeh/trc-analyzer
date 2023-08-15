@@ -140,6 +140,23 @@ public class Donor {
 		}
 		return specimenToReturn;
 	}
+	
+	/**
+	 * This makes sure that at least one specimen has mutation data.
+	 * 
+	 * @return
+	 */
+	public boolean hasMutationData() {
+		for (Map.Entry<String, Specimen> entry : specimens.entrySet()) {
+			Specimen specimen = entry.getValue();
+			if (specimen.hasMutationData()) {
+				return true;
+			}
+		}
+		// If we reach here, it means we never returned true in the loop meaning NONE of
+		// the specimens have mutation data.
+		return false;
+	}
 
 	/**
 	 * This makes sure that at least one specimen has BOTH mutation and expression

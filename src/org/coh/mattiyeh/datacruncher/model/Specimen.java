@@ -15,7 +15,7 @@ public class Specimen {
 	String donorId;
 	String specimenType;
 	String specimenSubtype;
-	boolean isTumorConfirmed;
+	boolean isTumorConfirmed; // Is this even used anymore??
 	String donorTreatmentType;
 
 	private Map<String, Sample> samples;
@@ -46,6 +46,7 @@ public class Specimen {
 		return donorTreatmentType;
 	}
 
+	// Is this even used anymore??
 	public boolean isTumorConfirmed() {
 		return isTumorConfirmed;
 	}

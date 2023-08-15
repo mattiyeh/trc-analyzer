@@ -14,11 +14,11 @@ public class Constants {
 	static final String MUTATIONS_FILENAME = "simple_somatic_mutation.open.tsv.gz";
 	static final String EXPRESSIONS_FILENAME = "exp_seq.tsv.gz";
 
-	static final String[] TUMOR_TYPES2 = { "bladder", "bone", "breast", "cervix", "colorectal", "esophagus",
+	static final String[] TUMOR_TYPES = { "bladder", "bone", "breast", "cervix", "colorectal", "esophagus",
 			"gallbladder", "kidney", "liver", "lung", "melanoma", "ovary", "pancreas", "pnet", "prostate", "stomach",
 			"uterus" };
 	
-	static final String[] TUMOR_TYPES = { "bladder" };
+	static final String[] TUMOR_TYPES2 = { "stomach" };
 
 	static final String WORKING_ICGC_DIR = WORKING_DIR + "icgc-datasets\\";
 	static final String ICGC_SAMPLE_ID = "icgc_sample_id";
