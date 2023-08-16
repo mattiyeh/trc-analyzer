@@ -259,10 +259,16 @@ public class Donor {
 	 * @return
 	 */
 	public Set<Mutation> getMutationsInExpressedGenes(MutationRange mutationRange, MutationType mutationType, Operator lowOp, int lowNthPercentile, Operator highOp, int highNthPercentile) {
-		Set<Mutation> mutations = getMutations(mutationRange, mutationType, lowOp, lowNthPercentile, true);
-		mutations.addAll(getMutations(mutationRange, mutationType, highOp, highNthPercentile, true));
-
-		return mutations;
+		// Gets all mutations greater than 25%
+		Set<Mutation> lowMutations = getMutations(mutationRange, mutationType, lowOp, lowNthPercentile, true);
+		
+		// Gets all mutations less than 75%
+		Set<Mutation> highMutations = getMutations(mutationRange, mutationType, highOp, highNthPercentile, true);
+		
+		// Intersect both sets to keep only those that are between 25% and 75%
+		lowMutations.retainAll(highMutations);
+		
+		return lowMutations;
 	}
 
 	/**
