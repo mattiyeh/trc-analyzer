@@ -376,7 +376,9 @@ public class DataCruncher {
 
 			if (donors.get(donorId).containsSpecimen(specimenId)) {
 				Sample sample = donors.get(donorId).getSpecimen(specimenId).getSample(sampleId);
-				sample.addGeneNormExpressionLevel(geneId, normalizedReadCount);
+				if (!sample.getGeneNormExpressionLevels().containsKey(geneId)) {
+					sample.addGeneNormExpressionLevel(geneId, normalizedReadCount);
+				}
 			}
 		}
 
