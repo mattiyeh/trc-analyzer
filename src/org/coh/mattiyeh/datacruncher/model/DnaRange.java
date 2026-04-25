@@ -26,7 +26,7 @@ public class DnaRange {
 	}
 
 	public boolean overlaps(int mutStart, int mutEnd) {
-		return isInRange(mutStart) || isInRange(mutEnd);
+		return isInRange(mutStart) || isInRange(mutEnd) || (mutStart <= start && mutEnd >= end);
 	}
 
 	private boolean isInRange(int snpPosition) {
