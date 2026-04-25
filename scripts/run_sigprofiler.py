@@ -208,12 +208,24 @@ def step3_aggregate_high():
             continue
         # ICGC donor IDs are globally unique, but prefix by tumor for clarity.
         df.columns = [f"{tumor}__{c}" for c in df.columns]
-        frames.append(df)
+        frames.append((tumor, df))
         log(f"  {project}: {df.shape[1]} samples")
 
     if not frames:
         sys.exit("No high matrices found -- cannot aggregate")
-    agg = pd.concat(frames, axis=1).fillna(0).astype(int)
+
+    # All matrices must share the same 96 trinucleotide channels in the same
+    # order; otherwise pd.concat would silently misalign rows.
+    ref_tumor, ref_df = frames[0]
+    for tumor, df in frames[1:]:
+        if not df.index.equals(ref_df.index):
+            sys.exit(
+                f"SBS96 channel mismatch: '{tumor}' row index differs from "
+                f"'{ref_tumor}'. Refusing to aggregate -- inputs were not "
+                f"produced by a consistent MatrixGenerator run."
+            )
+
+    agg = pd.concat([df for _, df in frames], axis=1).fillna(0).astype(int)
     agg.index.name = "MutationType"
     agg.to_csv(out_path, sep="\t")
     log(f"  wrote {out_path} ({agg.shape[1]} samples, {agg.shape[0]} channels)")
@@ -351,6 +363,38 @@ def step5_assignment(cosmic_db):
                    WORKDIR / "assignment" / project)
 
 
+# --- Step 7: unconstrained Assignment (sensitivity comparison) -------------
+# Constrained refit (Step 5) is the primary result. This adds the unconstrained
+# fit against the full bundled COSMIC database, the comparison §7 of the
+# best-practices guide expects every signatures paper to report.
+
+def step7_unconstrained_comparison():
+    log("Step 7: unconstrained Assignment on pan-cancer high (sensitivity)")
+    matrix_path = pancancer_matrix_path()
+    if not matrix_path.exists():
+        log(f"  ABORT: pan-cancer matrix missing: {matrix_path}")
+        return
+    out_dir = WORKDIR / "assignment" / f"{PANCANCER_LABEL}_unconstrained"
+    if (out_dir / "Assignment_Solution").exists():
+        log(f"  exists: {out_dir}")
+        return
+    out_dir.mkdir(parents=True, exist_ok=True)
+    from SigProfilerAssignment import Analyzer as Analyze
+    log(f"  assign {PANCANCER_LABEL} (full COSMIC database, signature_database=None)")
+    Analyze.cosmic_fit(
+        samples=str(matrix_path),
+        output=str(out_dir),
+        input_type="matrix",
+        context_type="96",
+        genome_build=REFERENCE,
+        cosmic_version=COSMIC_VER,
+        signature_database=None,
+        collapse_to_SBS96=True,
+        nnls_add_penalty=0.05,
+        nnls_remove_penalty=0.01,
+    )
+
+
 # --- Step 6: no-hypermutator sensitivity analysis --------------------------
 
 def step6_no_hyper(panc_matrix):
@@ -397,6 +441,7 @@ def main():
     report_real_min_silhouette(extractor_out, PANCANCER_LABEL)
 
     step5_assignment(cosmic_db)
+    step7_unconstrained_comparison()
     step6_no_hyper(panc_matrix)
 
     log("DONE")
