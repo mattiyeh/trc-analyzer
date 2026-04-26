@@ -39,6 +39,26 @@ public class Sample {
 	}
 
 	/**
+	 * Returns the subset of this sample's mutations matching the requested
+	 * range / type / expression criteria.
+	 *
+	 * <h3>Multi-gene attribution semantics</h3>
+	 * If {@code expressionSample} is non-null, a mutation that overlaps the
+	 * promoters of MULTIPLE protein-coding genes is included if <em>any</em>
+	 * of those genes satisfies the expression cutoff under the given operator.
+	 * The mutation is only added once (TreeSet deduplicates), but the same
+	 * mutation can be returned by multiple separate calls with different
+	 * operators (e.g. {@code GREATERTHANOREQUAL p75} and
+	 * {@code LESSTHANOREQUAL p25}) when its overlapping genes fall on opposite
+	 * sides of the cutoff.
+	 *
+	 * <p>Practical consequence: per-bin output files
+	 * (*_high.tsv / *_mid.tsv / *_low.tsv / *_zero.tsv) DO NOT have row counts
+	 * that sum to the unfiltered *_all.tsv count. A single mutation can appear
+	 * in two bin files if it overlaps two genes whose expressions fall in
+	 * different bins. Manuscript Methods should describe this explicitly when
+	 * citing per-bin mutation counts.
+	 *
 	 * @param mutationRange
 	 * @param mutationType
 	 * @param op

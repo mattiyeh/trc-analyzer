@@ -134,16 +134,21 @@ public class Specimen {
 			// First calculate the cutoff using the expression Sample
 			expressionSample = getExpressionSample();
 			
-			if (expressionSample != null) {
-				if (nthPercentile == 0) {
-					cutoff = 0;
-				} else {
-					List<Double> geneNormExpressionLevelLogValues = expressionSample
-							.getGeneNormExpressionLevelLogValues();
-					cutoff = PercentileUtil.calculateNthPercentile(geneNormExpressionLevelLogValues, nthPercentile);
-				}
+			// hasExpressionData() returned true above, so getExpressionSample() must
+			// return a non-null sample. If it doesn't, our internal invariants are
+			// broken and silently returning no mutations would mask the bug.
+			if (expressionSample == null) {
+				throw new IllegalStateException(
+						"Specimen " + specimenId + " passed hasExpressionData() but "
+								+ "getExpressionSample() returned null — internal invariant violated.");
+			}
+
+			if (nthPercentile == 0) {
+				cutoff = 0;
 			} else {
-				// TODO: throw exception if null?
+				List<Double> geneNormExpressionLevelLogValues = expressionSample
+						.getGeneNormExpressionLevelLogValues();
+				cutoff = PercentileUtil.calculateNthPercentile(geneNormExpressionLevelLogValues, nthPercentile);
 			}
 			
 		}

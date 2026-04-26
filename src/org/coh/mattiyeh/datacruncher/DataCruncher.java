@@ -376,6 +376,11 @@ public class DataCruncher {
 
 			if (donors.get(donorId).containsSpecimen(specimenId)) {
 				Sample sample = donors.get(donorId).getSpecimen(specimenId).getSample(sampleId);
+				// Skip if the expression file references a sample that didn't pass QC
+				// in readSpecimensAndSamples() (so it was never added to the specimen).
+				if (sample == null) {
+					continue;
+				}
 				if (!sample.getGeneNormExpressionLevels().containsKey(geneId)) {
 					sample.addGeneNormExpressionLevel(geneId, normalizedReadCount);
 				}
