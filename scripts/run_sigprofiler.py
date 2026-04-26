@@ -36,9 +36,9 @@ import pandas as pd
 # --- Configuration ----------------------------------------------------------
 
 REPO_ROOT     = Path("/data/research/projects/trc_signatures")
-ICGC_OUTPUTS  = REPO_ROOT / "icgc-datasets-outputs__2026.03.15_00.10.17"
+ICGC_OUTPUTS  = REPO_ROOT / "outputs/java/2026.03.15"
 TIMESTAMP_TAG = "2026.03.15_00.10.17"
-WORKDIR       = REPO_ROOT / "sigprofiler_run"
+WORKDIR       = REPO_ROOT / "outputs/sigprofiler"
 REFERENCE     = "GRCh37"
 COSMIC_VER    = 3.5
 
