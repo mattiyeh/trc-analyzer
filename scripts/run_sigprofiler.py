@@ -18,6 +18,12 @@ Pipeline:
       sensitivity comparison.
   6.  No-hypermutator sensitivity analysis: drop samples > mean + 2 SD
       and rerun Extractor (both kinds).
+  6b. Mechanism-based hypermutator removal: drop donors with MMR >=30%
+      OR POLE >=30% attribution in the unconstrained SBS96 Assignment
+      and rerun Extractor (both kinds). PCAWG-consistent alternative
+      to step 6's count-based cutoff. Defined but not wired into main()
+      yet -- runs as part of the full sensitivity pipeline. See
+      docs/PLANNED_SENSITIVITY_STEPS.md section 6b.
   Ovary HRD exclusion: remove ovary donors with SBS3 attribution > 50%
       of total SBS, rerun MatrixGenerator + Extractor on the filtered
       ovary cohort.
@@ -648,6 +654,105 @@ def step6_no_hyper(panc_sbs_matrix, panc_id_matrix):
     log("Step 6: no-hypermutator sensitivity analysis (SBS + ID)")
     _no_hyper_one(panc_sbs_matrix, "SBS96", PANCANCER_LABEL)
     _no_hyper_one(panc_id_matrix,  "ID83",  PANCANCER_INDEL_LABEL)
+
+
+# --- Step 6b: mechanism-based hypermutator removal -------------------------
+# Drop donors whose *unconstrained* SBS96 Assignment profile is dominated
+# by MMR- or POLE-deficiency signatures, then rerun Extractor. PCAWG-
+# consistent (mechanism-defined) alternative to step6_no_hyper's
+# count-based mean+2SD cutoff -- which conflates true MMR/POLE
+# hypermutators with high-TRC donors. See
+# docs/PLANNED_SENSITIVITY_STEPS.md section 6b for the full contract.
+
+# Hypermutator-defining SBS signatures (COSMIC v3.5).
+MMR_SIGS  = ["SBS6", "SBS14", "SBS15", "SBS20", "SBS21", "SBS26", "SBS44"]
+POLE_SIGS = ["SBS10a", "SBS10b", "SBS10c", "SBS10d"]
+HYPER_FRACTION_THRESHOLD = 0.30
+
+
+def _identify_hypermutators_by_mechanism():
+    """Donor IDs (e.g. 'pancreas__DO35442') whose unconstrained SBS96
+    Assignment profile has MMR fraction >= HYPER_FRACTION_THRESHOLD OR
+    POLE fraction >= HYPER_FRACTION_THRESHOLD. Returns None if the
+    unconstrained Assignment activities file is missing.
+    """
+    activities_file = (
+        WORKDIR / "assignment" / f"{PANCANCER_LABEL}_unconstrained"
+        / "Assignment_Solution" / "Activities"
+        / "Assignment_Solution_Activities.txt"
+    )
+    if not activities_file.exists():
+        log(f"  ABORT: unconstrained Assignment not found: {activities_file}")
+        return None
+    act = pd.read_csv(activities_file, sep="\t", index_col=0)
+    total = act.sum(axis=1).replace(0, pd.NA)
+    mmr_cols  = [c for c in MMR_SIGS  if c in act.columns]
+    pole_cols = [c for c in POLE_SIGS if c in act.columns]
+    mmr_frac  = (act[mmr_cols].sum(axis=1)  / total).fillna(0.0)
+    pole_frac = (act[pole_cols].sum(axis=1) / total).fillna(0.0)
+    mmr_hits  = act.index[mmr_frac  >= HYPER_FRACTION_THRESHOLD]
+    pole_hits = act.index[pole_frac >= HYPER_FRACTION_THRESHOLD]
+    hyper = set(mmr_hits) | set(pole_hits)
+    log(f"  unconstrained Assignment cohort: n={len(act)}")
+    log(f"  MMR sigs present:  {mmr_cols}")
+    log(f"  POLE sigs present: {pole_cols}")
+    log(f"  MMR-dominant donors  (>= {HYPER_FRACTION_THRESHOLD:.0%}): "
+        f"{len(mmr_hits)} -> {sorted(mmr_hits)}")
+    log(f"  POLE-dominant donors (>= {HYPER_FRACTION_THRESHOLD:.0%}): "
+        f"{len(pole_hits)} -> {sorted(pole_hits)}")
+    log(f"  union to drop: {len(hyper)} donors")
+    return hyper
+
+
+def _no_mmr_pole_one(panc_matrix, kind, label, hyper_donors):
+    if panc_matrix is None or not Path(panc_matrix).exists():
+        log(f"  [{kind}] ABORT: pan-cancer matrix missing")
+        return
+    out_dir = WORKDIR / "sensitivity" / "pancancer_no_mmr_pole"
+    maf_dir = out_dir / "maf"
+    filt_matrix = maf_dir / f"{label}_no_mmr_pole.{KIND[kind]['matrix_ext']}"
+    extractor_out = out_dir / f"extractor_{kind}"
+
+    if cosmic_signatures_path(extractor_out, kind).exists():
+        log(f"  [{kind}] exists: {extractor_out}")
+        report_real_min_silhouette(extractor_out, f"{label}_no_mmr_pole", kind)
+        return
+
+    maf_dir.mkdir(parents=True, exist_ok=True)
+    df = pd.read_csv(panc_matrix, sep="\t", index_col=0)
+    n_in = df.shape[1]
+    keep = [c for c in df.columns if c not in hyper_donors]
+    drop = sorted(set(df.columns) - set(keep))
+    log(f"  [{kind}] cohort before: n={n_in}; "
+        f"dropping {len(drop)} mechanism-defined hypermutator(s): {drop}")
+
+    df[keep].to_csv(filt_matrix, sep="\t")
+    log(f"  [{kind}] filtered matrix: {filt_matrix} ({len(keep)} samples)")
+
+    run_extractor(filt_matrix, extractor_out, f"{label}_no_mmr_pole", kind)
+    report_real_min_silhouette(extractor_out, f"{label}_no_mmr_pole", kind)
+
+
+def step6b_no_mmr_pole(panc_sbs_matrix, panc_id_matrix):
+    """Mechanism-based hypermutator removal sensitivity analysis.
+
+    Defines hypermutators as donors with >= HYPER_FRACTION_THRESHOLD MMR
+    (SBS6/14/15/20/21/26/44) OR >= HYPER_FRACTION_THRESHOLD POLE
+    (SBS10a-d) attribution in the *unconstrained* pan-cancer SBS96
+    Assignment. Applies the same donor exclusion list to both the SBS96
+    and ID83 pan-cancer matrices and reruns Extractor.
+
+    PCAWG-consistent (mechanism-defined) alternative to the count-based
+    mean+2SD cutoff used in step6_no_hyper. Requires
+    step7_unconstrained_comparison() to have produced
+    `<PANCANCER_LABEL>_unconstrained` Assignment output beforehand.
+    """
+    log("Step 6b: mechanism-based hypermutator removal (SBS + ID)")
+    hyper = _identify_hypermutators_by_mechanism()
+    if hyper is None:
+        return
+    _no_mmr_pole_one(panc_sbs_matrix, "SBS96", PANCANCER_LABEL, hyper)
+    _no_mmr_pole_one(panc_id_matrix,  "ID83",  PANCANCER_INDEL_LABEL, hyper)
 
 
 # --- Ovary HRD exclusion ---------------------------------------------------
