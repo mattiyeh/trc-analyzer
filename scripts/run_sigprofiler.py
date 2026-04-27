@@ -33,8 +33,9 @@ Sensitivity / control steps (added per docs/PLANNED_SENSITIVITY_STEPS.md):
       whole-genome unfiltered SBS96 count > mean+2SD over the 658 PPP-HTG
       cohort. Single donor exclusion set applied to both SBS96 and ID83.
   Ovary HRD exclusion (FIXED): remove ovary donors with SBS3 attribution
-      > 50% of total SBS in the *unconstrained* ovary Assignment, rerun
-      MatrixGenerator + Extractor on the filtered ovary cohort.
+      > 50% in the per-tumor ovary Extractor's COSMIC-decomposed Activities
+      (produced by step4b), rerun MatrixGenerator + Extractor on the
+      filtered ovary cohort.
 
 Resumable: each step skips work whose outputs already exist.
 """
@@ -1213,42 +1214,50 @@ def step6c_no_wgs_hyper(panc_sbs_matrix, panc_id_matrix):
 
 # --- Ovary HRD exclusion ---------------------------------------------------
 # In ovary, HRD/SBS3 dominates and may mask SBS96-TRC. Drop ovary donors
-# with SBS3 fraction > HRD_SBS3_THRESHOLD in the *unconstrained* ovary
-# Assignment, regenerate the ovary SBS96 matrix from a filtered MAF, and
-# rerun Extractor.
+# with SBS3 fraction > HRD_SBS3_THRESHOLD, regenerate the ovary SBS96 matrix
+# from a filtered MAF, and rerun Extractor.
 #
-# Bug history: previously this function read SBS3 from the *constrained*
-# Assignment, which uses only the 10 COSMIC sigs that decompose to the
-# pan-cancer Extractor-derived signatures -- a set that does NOT include
-# SBS3. The "SBS3 not in columns" branch always fired and zero donors
-# were excluded. Fixed 2026-04-27 to read from the unconstrained
-# Assignment (full COSMIC v3.5, includes SBS3). See
-# docs/PLANNED_SENSITIVITY_STEPS.md §0.
+# Source for SBS3 attribution: the per-tumor ovary Extractor's
+# COSMIC-decomposed Activities file (produced by step4b). This file
+# decomposes the ovary k=1 de novo signature into 5 COSMIC sigs
+# (SBS1/3/5/98/102) and gives per-donor activities under that
+# decomposition.
+#
+# Bug history (2026-04-27):
+#   v1: read from CONSTRAINED Assignment -- failed silently because
+#       constrained uses only the 10 COSMIC sigs decomposing the pan-cancer
+#       Extractor signatures, a set that does NOT include SBS3. The
+#       'SBS3 not in columns' branch always fired -> zero donors excluded.
+#   v2: switched to UNCONSTRAINED pan-cancer Assignment -- also failed.
+#       SigProfilerAssignment's NNLS-with-penalty (nnls_remove_penalty=0.01)
+#       zeros out flat/diffuse signatures like SBS3 from per-donor refits
+#       at low PPP-HTG mutation counts (median ~30 muts/ovary donor).
+#       Verified empirically: 0/658 pan-cancer donors had SBS3 > 0 in the
+#       unconstrained Assignment, so the threshold check excluded zero.
+#   v3 (this version): read from the per-tumor ovary Extractor's
+#       COSMIC-decomposed Activities. The decomposition is fit on the
+#       cohort spectrum (~2,700 ovary mutations total) before the
+#       per-donor projection, so SBS3 survives. Bimodal distribution:
+#       40 donors at SBS3=0, 47 donors at SBS3>50%, only 2 between
+#       30%-50%. Threshold is stable across 30-60% range.
+# See docs/PLANNED_SENSITIVITY_STEPS.md §0 for the full incident log.
 
 def step_ovary_hrd_exclusion():
     log("Ovary HRD exclusion: identify and remove SBS3-dominant donors")
     ovary_project = f"ovary_{PRIMARY_GROUP}"
 
-    # Bootstrap the unconstrained ovary Assignment if it doesn't exist
-    # (step7 only covers the pan-cancer aggregate by default).
-    ovary_unconstrained_dir = (
-        WORKDIR / "assignment" / f"{ovary_project}_unconstrained"
-    )
-    if not (ovary_unconstrained_dir / "Assignment_Solution").exists():
-        log(f"  ovary unconstrained Assignment missing -- running it now")
-        _unconstrained_one(
-            ovary_project, matgen_matrix_path(ovary_project, "SBS96"),
-            ovary_unconstrained_dir, "SBS96",
-        )
-
+    # Per-tumor ovary Extractor's COSMIC-decomposed Activities (produced
+    # by step4b). Donor IDs in this file are bare (e.g. 'DO35442') -- they
+    # match the per-tumor matrix and the MAF Tumor_Sample_Barcode, so no
+    # tumor-prefix stripping is needed for the downstream MAF filter.
     activities_file = (
-        ovary_unconstrained_dir
-        / "Assignment_Solution" / "Activities"
-        / "Assignment_Solution_Activities.txt"
+        WORKDIR / "per_tumor" / ovary_project / "extractor" / "SBS96"
+        / "Suggested_Solution" / "COSMIC_SBS96_Decomposed_Solution"
+        / "Activities" / "COSMIC_SBS96_Activities.txt"
     )
     if not activities_file.exists():
-        log(f"  ABORT: ovary unconstrained Assignment activities not found at "
-            f"{activities_file}")
+        log(f"  ABORT: per-tumor ovary COSMIC-decomposed Activities not found "
+            f"at {activities_file}. Has step4b run for ovary?")
         return
 
     out_root = WORKDIR / "ovary_hrd_excluded"
@@ -1264,17 +1273,18 @@ def step_ovary_hrd_exclusion():
         return
 
     act = pd.read_csv(activities_file, sep="\t", index_col=0)
-    if "SBS3" in act.columns:
-        total = act.sum(axis=1).replace(0, pd.NA)
-        sbs3_frac = (act["SBS3"] / total).fillna(0.0)
-        hrd_donors = set(sbs3_frac[sbs3_frac > HRD_SBS3_THRESHOLD].index)
-    else:
-        # With unconstrained Assignment + COSMIC v3.5, SBS3 should ALWAYS
-        # be one of the 97 columns. Reaching this branch indicates a
-        # broken upstream Assignment or a COSMIC version change.
-        log(f"  WARNING: SBS3 not in unconstrained columns: "
-            f"{list(act.columns)}")
-        hrd_donors = set()
+    if "SBS3" not in act.columns:
+        # Per-tumor ovary k=1 decomposes to {SBS1, SBS3, SBS5, SBS98, SBS102}
+        # by construction in the canonical run. If SBS3 is absent, the
+        # canonical per-tumor extractor was rerun with a different result
+        # and the HRD exclusion premise needs revisiting.
+        log(f"  ABORT: SBS3 not in per-tumor decomposed Activities columns: "
+            f"{list(act.columns)}. Has the canonical ovary extractor been "
+            f"rerun with a different decomposition?")
+        return
+    total = act.sum(axis=1).replace(0, pd.NA)
+    sbs3_frac = (act["SBS3"] / total).fillna(0.0)
+    hrd_donors = set(sbs3_frac[sbs3_frac > HRD_SBS3_THRESHOLD].index)
 
     n_total = len(act)
     n_hrd   = len(hrd_donors)
@@ -1363,8 +1373,9 @@ def main():
     step3g_pancancer_cfs_extractor()       # unified mechanism (CFS, all 17)
     step6b_no_mmr_pole(sbs_panc, id_panc)  # mechanism-based hyper removal
     step6c_no_wgs_hyper(sbs_panc, id_panc) # whole-genome SBS-count hyper removal
-    step_ovary_hrd_exclusion()             # FIXED: reads SBS3 from
-                                           # ovary unconstrained Assignment
+    step_ovary_hrd_exclusion()             # FIXED: reads SBS3 from per-tumor
+                                           # ovary COSMIC-decomposed Activities
+                                           # (produced by step4b)
 
     log("DONE")
 
