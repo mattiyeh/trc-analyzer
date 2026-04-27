@@ -18,15 +18,23 @@ Pipeline:
       sensitivity comparison.
   6.  No-hypermutator sensitivity analysis: drop samples > mean + 2 SD
       and rerun Extractor (both kinds).
+
+Sensitivity / control steps (added per docs/PLANNED_SENSITIVITY_STEPS.md):
+  3b. Pan-cancer PPP-LTG aggregate Extractor (HTG specificity control).
+  3c. Pan-cancer non-promoter SBS96 Extractor (PPP specificity control).
+  3d. Liver-excluded pan-cancer Extractor (compositional bias).
+  3e. Equal-weight pan-cancer Extractor, cap 50 donors per tumor seed=42.
+  3f. Pancreas-excluded pan-cancer Extractor (compositional bias).
+  3g. Pan-cancer CFS aggregate Extractor (unified mechanism, all 17 tumors).
   6b. Mechanism-based hypermutator removal: drop donors with MMR >=30%
       OR POLE >=30% attribution in the unconstrained SBS96 Assignment
-      and rerun Extractor (both kinds). PCAWG-consistent alternative
-      to step 6's count-based cutoff. Defined but not wired into main()
-      yet -- runs as part of the full sensitivity pipeline. See
-      docs/PLANNED_SENSITIVITY_STEPS.md section 6b.
-  Ovary HRD exclusion: remove ovary donors with SBS3 attribution > 50%
-      of total SBS, rerun MatrixGenerator + Extractor on the filtered
-      ovary cohort.
+      and rerun Extractor (PCAWG-consistent alternative to step 6).
+  6c. Whole-genome SBS96 count hypermutator removal: drop donors whose
+      whole-genome unfiltered SBS96 count > mean+2SD over the 658 PPP-HTG
+      cohort. Single donor exclusion set applied to both SBS96 and ID83.
+  Ovary HRD exclusion (FIXED): remove ovary donors with SBS3 attribution
+      > 50% of total SBS in the *unconstrained* ovary Assignment, rerun
+      MatrixGenerator + Extractor on the filtered ovary cohort.
 
 Resumable: each step skips work whose outputs already exist.
 """
@@ -87,6 +95,26 @@ PER_TUMOR_GROUPS = ["promoter_high", "promoter_low"]
 # Ovary HRD exclusion threshold: donors with SBS3 fraction above this are
 # considered HRD-dominant and removed for the ovary sensitivity analysis.
 HRD_SBS3_THRESHOLD = 0.50
+
+# Equal-weight (step3e) compositional rebalancing parameters.
+EQUAL_WEIGHT_CAP  = 50
+EQUAL_WEIGHT_SEED = 42
+
+# Tumors to exclude in single-tumor sensitivity steps.
+LIVER_EXCLUDED_TUMORS    = ["liver"]
+PANCREAS_EXCLUDED_TUMORS = ["pancreas"]
+
+# Which de novo column in the canonical pan-cancer Extractor output is
+# the TRC signature. SigProfiler's NMF output assigns "A"/"B" labels by
+# proportional mass, so the mapping can swap if the canonical run is
+# rerun (it did from 2023 to 2026 when SBS96-TRC mass crossed 50%).
+# These constants reflect the current canonical run -- inspect
+# docs/EXTRACTOR_RESULTS_2026.md and docs/ID83_EXTRACTOR_RESULTS_2026.md
+# if the canonical pan-cancer extraction is ever rerun.
+PANCANCER_TRC_COLUMN = {
+    "SBS96": "SBS96A",   # SBS96-TRC; T[C>G]T-dominant. See EXTRACTOR_RESULTS_2026.md
+    "ID83":  "ID83B",    # ID83-TRC; ≥5 bp microhomology deletion-dominant.
+}
 
 # Minimal MAF columns understood by SigProfilerMatrixGenerator.
 MAF_COLUMNS = [
@@ -392,6 +420,223 @@ def step3_aggregate_high():
     return sbs_path, id_path
 
 
+# --- Generalized aggregator for sensitivity-step pan-cancer matrices -------
+
+def _aggregate_group(group_label, kind, out_path, tumors=None):
+    """Aggregate per-tumor matrices for one (group, kind) combination.
+
+    Mirrors aggregate_high() but parameterized over the per-tumor
+    matrix subdir, so it can serve promoter_low / non_promoter / cfs.
+    `tumors` defaults to the full TUMORS list. Skips tumors whose
+    per-tumor matrix is missing or empty (header-only).
+    """
+    if out_path.exists():
+        log(f"  [{kind}] exists: {out_path}")
+        return out_path
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    iter_tumors = TUMORS if tumors is None else tumors
+    frames = []
+    for tumor in iter_tumors:
+        project = f"{tumor}_{group_label}"
+        m = matgen_matrix_path(project, kind)
+        if not m.exists():
+            log(f"  [{kind}] missing matrix for {project} -- skipping")
+            continue
+        df = pd.read_csv(m, sep="\t", index_col=0)
+        if df.shape[1] == 0:
+            log(f"  [{kind}] empty matrix for {project}")
+            continue
+        df.columns = [f"{tumor}__{c}" for c in df.columns]
+        frames.append((tumor, df))
+        log(f"  [{kind}] {project}: {df.shape[1]} samples")
+
+    if not frames:
+        log(f"  [{kind}] no '{group_label}' matrices found -- skipping aggregation")
+        return None
+
+    ref_tumor, ref_df = frames[0]
+    for tumor, df in frames[1:]:
+        if not df.index.equals(ref_df.index):
+            sys.exit(
+                f"{kind} channel mismatch: '{tumor}' row index differs from "
+                f"'{ref_tumor}' for group '{group_label}'. Refusing to aggregate."
+            )
+
+    agg = pd.concat([df for _, df in frames], axis=1).fillna(0).astype(int)
+    agg.index.name = "MutationType"
+    agg.to_csv(out_path, sep="\t")
+    log(f"  [{kind}] wrote {out_path} "
+        f"({agg.shape[1]} samples, {agg.shape[0]} channels)")
+    return out_path
+
+
+def aggregate_low(kind):
+    out_path = (WORKDIR / "sensitivity" / "pancancer_low" / "maf"
+                / f"pancancer_promoter_low.{KIND[kind]['matrix_ext']}")
+    return _aggregate_group("promoter_low", kind, out_path)
+
+
+def aggregate_nonpromoter(kind):
+    out_path = (WORKDIR / "sensitivity" / "pancancer_nonpromoter" / "maf"
+                / f"pancancer_non_promoter.{KIND[kind]['matrix_ext']}")
+    return _aggregate_group("non_promoter", kind, out_path)
+
+
+def aggregate_cfs(kind):
+    """All 17 tumors -- CFS regions don't depend on expression data."""
+    out_path = (WORKDIR / "sensitivity" / "pancancer_cfs" / "maf"
+                / f"pancancer_cfs.{KIND[kind]['matrix_ext']}")
+    return _aggregate_group("cfs", kind, out_path)
+
+
+def make_excluded_aggregate(kind, tumors_to_exclude, out_dir, out_label):
+    """Drop columns whose names start with any of `<tumor>__` from the
+    canonical pan-cancer aggregate matrix and write the result.
+    Returns the new matrix path or None if the source matrix is missing.
+    """
+    src = pancancer_matrix_path(kind)
+    out_path = out_dir / "maf" / f"{out_label}.{KIND[kind]['matrix_ext']}"
+    if out_path.exists():
+        log(f"  [{kind}] exists: {out_path}")
+        return out_path
+    if not src.exists():
+        log(f"  [{kind}] ABORT: source pan-cancer matrix missing: {src}")
+        return None
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    df = pd.read_csv(src, sep="\t", index_col=0)
+    n_in = df.shape[1]
+    prefixes = tuple(f"{t}__" for t in tumors_to_exclude)
+    keep = [c for c in df.columns if not c.startswith(prefixes)]
+    drop = sorted(set(df.columns) - set(keep))
+    log(f"  [{kind}] excluding tumors {tumors_to_exclude}: "
+        f"dropping {len(drop)}/{n_in} samples")
+    df[keep].to_csv(out_path, sep="\t")
+    log(f"  [{kind}] wrote {out_path} ({len(keep)} samples)")
+    return out_path
+
+
+def make_capped_aggregate(kind, cap, seed, out_dir, out_label):
+    """Subsample columns of the canonical pan-cancer aggregate per tumor:
+    if a tumor has > `cap` donors, randomly sample `cap` with the given
+    `seed`. Tumors with <= `cap` donors are kept whole.
+    """
+    import numpy as np
+    src = pancancer_matrix_path(kind)
+    out_path = out_dir / "maf" / f"{out_label}.{KIND[kind]['matrix_ext']}"
+    if out_path.exists():
+        log(f"  [{kind}] exists: {out_path}")
+        return out_path
+    if not src.exists():
+        log(f"  [{kind}] ABORT: source pan-cancer matrix missing: {src}")
+        return None
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    df = pd.read_csv(src, sep="\t", index_col=0)
+
+    # Group columns by tumor prefix.
+    by_tumor = {}
+    for c in df.columns:
+        tumor = c.split("__", 1)[0]
+        by_tumor.setdefault(tumor, []).append(c)
+
+    rng = np.random.default_rng(seed)
+    keep = []
+    for tumor in sorted(by_tumor):
+        cols = by_tumor[tumor]
+        if len(cols) > cap:
+            # Sort first for deterministic ordering, then sample.
+            cols_sorted = sorted(cols)
+            picked = list(rng.choice(cols_sorted, size=cap, replace=False))
+            log(f"  [{kind}] {tumor}: capping {len(cols)} -> {cap}")
+        else:
+            picked = sorted(cols)
+            log(f"  [{kind}] {tumor}: keeping all {len(cols)}")
+        keep.extend(sorted(picked))
+
+    df[keep].to_csv(out_path, sep="\t")
+    log(f"  [{kind}] wrote {out_path} ({len(keep)} samples, "
+        f"cap={cap}, seed={seed})")
+    return out_path
+
+
+# --- TRC component identification & cosine reporting ------------------------
+
+def _pancancer_de_novo_signatures_path(kind):
+    """Canonical pan-cancer Extractor de novo signatures file.
+    Used as the cosine reference for sensitivity-step extracted sigs.
+    """
+    label = PANCANCER_LABEL if kind == "SBS96" else PANCANCER_INDEL_LABEL
+    sub = KIND[kind]["extractor_subdir"]
+    return (WORKDIR / "pancancer" / label / "extractor" / sub
+            / "Suggested_Solution"
+            / f"{sub}_De-Novo_Solution" / "Signatures"
+            / f"{sub}_De-Novo_Signatures.txt")
+
+
+def _sensitivity_de_novo_signatures_path(extractor_out, kind):
+    sub = KIND[kind]["extractor_subdir"]
+    return (Path(extractor_out) / sub / "Suggested_Solution"
+            / f"{sub}_De-Novo_Solution" / "Signatures"
+            / f"{sub}_De-Novo_Signatures.txt")
+
+
+def _cosine(a, b):
+    import numpy as np
+    a = a.astype(float).to_numpy()
+    b = b.astype(float).to_numpy()
+    na, nb = (a * a).sum() ** 0.5, (b * b).sum() ** 0.5
+    if na == 0 or nb == 0:
+        return float("nan")
+    return float((a * b).sum() / (na * nb))
+
+
+def report_trc_cosine(extractor_out, label, kind):
+    """Log a pairwise cosine matrix between the sensitivity-step de novo
+    signatures and the canonical pan-cancer de novo signatures, and
+    identify the TRC component (sensitivity sig with highest cosine to
+    PANCANCER_TRC_COLUMN[kind]).
+
+    Defensive: silently skips if either file is missing (e.g. canonical
+    pan-cancer Extractor hasn't run yet).
+    """
+    sens_path = _sensitivity_de_novo_signatures_path(extractor_out, kind)
+    ref_path  = _pancancer_de_novo_signatures_path(kind)
+    if not sens_path.exists():
+        log(f"  [{kind}] TRC cosine: sensitivity sig file missing ({sens_path})")
+        return
+    if not ref_path.exists():
+        log(f"  [{kind}] TRC cosine: canonical pan-cancer ref missing ({ref_path})")
+        return
+
+    sens = pd.read_csv(sens_path, sep="\t", index_col=0)
+    ref  = pd.read_csv(ref_path,  sep="\t", index_col=0)
+    if not sens.index.equals(ref.index):
+        # Defensive: same channel index expected.
+        log(f"  [{kind}] TRC cosine: channel index mismatch -- skipping")
+        return
+
+    trc_col = PANCANCER_TRC_COLUMN[kind]
+    if trc_col not in ref.columns:
+        log(f"  [{kind}] TRC cosine: '{trc_col}' not in canonical ref columns "
+            f"{list(ref.columns)}; PANCANCER_TRC_COLUMN may need updating")
+        return
+
+    log(f"  [{kind}] TRC cosines for {label} (vs canonical pan-cancer):")
+    log(f"    {'sens_sig':<14} | " + " | ".join(f"{c:^8}" for c in ref.columns))
+    log(f"    {'-'*14}-+-" + "-+-".join("-" * 8 for _ in ref.columns))
+    best_sens, best_cos = None, -2.0
+    for sens_col in sens.columns:
+        cosines = {ref_col: _cosine(sens[sens_col], ref[ref_col])
+                   for ref_col in ref.columns}
+        log(f"    {sens_col:<14} | " + " | ".join(
+            f"{cosines[c]:8.4f}" for c in ref.columns))
+        if cosines[trc_col] > best_cos:
+            best_cos = cosines[trc_col]
+            best_sens = sens_col
+    log(f"  [{kind}] TRC component for {label}: {best_sens} "
+        f"(cosine to canonical {trc_col} = {best_cos:.4f})")
+
+
 # --- Step 4: Extractor de novo ---------------------------------------------
 
 def cosmic_signatures_path(extractor_output, kind):
@@ -630,6 +875,7 @@ def _no_hyper_one(panc_matrix, kind, label):
     if cosmic_signatures_path(extractor_out, kind).exists():
         log(f"  [{kind}] exists: {extractor_out}")
         report_real_min_silhouette(extractor_out, f"{label}_no_hyper", kind)
+        report_trc_cosine(extractor_out, f"{label}_no_hyper", kind)
         return
 
     no_hyper_dir.mkdir(parents=True, exist_ok=True)
@@ -648,6 +894,7 @@ def _no_hyper_one(panc_matrix, kind, label):
 
     run_extractor(no_hyper_matrix, extractor_out, f"{label}_no_hyper", kind)
     report_real_min_silhouette(extractor_out, f"{label}_no_hyper", kind)
+    report_trc_cosine(extractor_out, f"{label}_no_hyper", kind)
 
 
 def step6_no_hyper(panc_sbs_matrix, panc_id_matrix):
@@ -716,6 +963,7 @@ def _no_mmr_pole_one(panc_matrix, kind, label, hyper_donors):
     if cosmic_signatures_path(extractor_out, kind).exists():
         log(f"  [{kind}] exists: {extractor_out}")
         report_real_min_silhouette(extractor_out, f"{label}_no_mmr_pole", kind)
+        report_trc_cosine(extractor_out, f"{label}_no_mmr_pole", kind)
         return
 
     maf_dir.mkdir(parents=True, exist_ok=True)
@@ -731,6 +979,7 @@ def _no_mmr_pole_one(panc_matrix, kind, label, hyper_donors):
 
     run_extractor(filt_matrix, extractor_out, f"{label}_no_mmr_pole", kind)
     report_real_min_silhouette(extractor_out, f"{label}_no_mmr_pole", kind)
+    report_trc_cosine(extractor_out, f"{label}_no_mmr_pole", kind)
 
 
 def step6b_no_mmr_pole(panc_sbs_matrix, panc_id_matrix):
@@ -755,22 +1004,251 @@ def step6b_no_mmr_pole(panc_sbs_matrix, panc_id_matrix):
     _no_mmr_pole_one(panc_id_matrix,  "ID83",  PANCANCER_INDEL_LABEL, hyper)
 
 
+# --- Step 3 sensitivity family --------------------------------------------
+# step3b: pan-cancer PPP-LTG aggregate Extractor (HTG specificity control)
+# step3c: pan-cancer non-promoter SBS96 Extractor (PPP specificity control)
+# step3d: liver-excluded pan-cancer Extractor (compositional bias)
+# step3e: equal-weight pan-cancer Extractor (compositional bias, cap=50)
+# step3f: pancreas-excluded pan-cancer Extractor (compositional bias)
+# step3g: pan-cancer CFS aggregate Extractor (unified mechanism, all 17 tumors)
+# All are resumable -- skip work whose Extractor cosmic-DB output exists.
+# All use the KIND dispatch table for SBS96/ID83 parameterization.
+
+def _run_sensitivity_extractor(matrix_path, out_dir, label, kind):
+    """Wrapper that runs Extractor + reports min silhouette + reports
+    TRC cosine. Skips silently if matrix_path is None (upstream
+    aggregator returned no data)."""
+    if matrix_path is None:
+        return
+    extractor_out = out_dir / f"extractor_{kind}"
+    if cosmic_signatures_path(extractor_out, kind).exists():
+        log(f"  [{kind}] exists: {extractor_out}")
+        report_real_min_silhouette(extractor_out, label, kind)
+        report_trc_cosine(extractor_out, label, kind)
+        return
+    run_extractor(matrix_path, extractor_out, label, kind)
+    report_real_min_silhouette(extractor_out, label, kind)
+    report_trc_cosine(extractor_out, label, kind)
+
+
+def step3b_aggregate_low():
+    log("Step 3b: pan-cancer PPP-LTG aggregate Extractor (SBS96 + ID83)")
+    out_dir = WORKDIR / "sensitivity" / "pancancer_low"
+    sbs_matrix = aggregate_low("SBS96")
+    id_matrix  = aggregate_low("ID83")
+    _run_sensitivity_extractor(sbs_matrix, out_dir, "pancancer_promoter_low", "SBS96")
+    _run_sensitivity_extractor(id_matrix,  out_dir, "pancancer_promoter_low", "ID83")
+
+
+def step3c_pancancer_nonpromoter():
+    log("Step 3c: pan-cancer non-promoter SBS96 Extractor (PPP specificity)")
+    out_dir = WORKDIR / "sensitivity" / "pancancer_nonpromoter"
+    sbs_matrix = aggregate_nonpromoter("SBS96")
+    _run_sensitivity_extractor(sbs_matrix, out_dir, "pancancer_non_promoter", "SBS96")
+
+
+def step3d_liver_excluded():
+    log("Step 3d: liver-excluded pan-cancer Extractor (SBS96 + ID83)")
+    out_dir = WORKDIR / "sensitivity" / "pancancer_no_liver"
+    sbs_matrix = make_excluded_aggregate(
+        "SBS96", LIVER_EXCLUDED_TUMORS, out_dir,
+        "pancancer_promoter_high_no_liver",
+    )
+    id_matrix = make_excluded_aggregate(
+        "ID83", LIVER_EXCLUDED_TUMORS, out_dir,
+        "pancancer_promoter_high_indel_no_liver",
+    )
+    _run_sensitivity_extractor(sbs_matrix, out_dir,
+        "pancancer_promoter_high_no_liver", "SBS96")
+    _run_sensitivity_extractor(id_matrix, out_dir,
+        "pancancer_promoter_high_indel_no_liver", "ID83")
+
+
+def step3e_equal_weight():
+    log(f"Step 3e: equal-weight pan-cancer Extractor "
+        f"(cap={EQUAL_WEIGHT_CAP}, seed={EQUAL_WEIGHT_SEED}, SBS96 + ID83)")
+    out_dir = WORKDIR / "sensitivity" / "pancancer_capped50"
+    sbs_matrix = make_capped_aggregate(
+        "SBS96", EQUAL_WEIGHT_CAP, EQUAL_WEIGHT_SEED, out_dir,
+        f"pancancer_promoter_high_capped{EQUAL_WEIGHT_CAP}_seed{EQUAL_WEIGHT_SEED}",
+    )
+    id_matrix = make_capped_aggregate(
+        "ID83", EQUAL_WEIGHT_CAP, EQUAL_WEIGHT_SEED, out_dir,
+        f"pancancer_promoter_high_indel_capped{EQUAL_WEIGHT_CAP}_seed{EQUAL_WEIGHT_SEED}",
+    )
+    _run_sensitivity_extractor(sbs_matrix, out_dir,
+        f"pancancer_capped{EQUAL_WEIGHT_CAP}", "SBS96")
+    _run_sensitivity_extractor(id_matrix, out_dir,
+        f"pancancer_capped{EQUAL_WEIGHT_CAP}_indel", "ID83")
+
+
+def step3f_pancreas_excluded():
+    log("Step 3f: pancreas-excluded pan-cancer Extractor (SBS96 + ID83)")
+    out_dir = WORKDIR / "sensitivity" / "pancancer_no_pancreas"
+    sbs_matrix = make_excluded_aggregate(
+        "SBS96", PANCREAS_EXCLUDED_TUMORS, out_dir,
+        "pancancer_promoter_high_no_pancreas",
+    )
+    id_matrix = make_excluded_aggregate(
+        "ID83", PANCREAS_EXCLUDED_TUMORS, out_dir,
+        "pancancer_promoter_high_indel_no_pancreas",
+    )
+    _run_sensitivity_extractor(sbs_matrix, out_dir,
+        "pancancer_promoter_high_no_pancreas", "SBS96")
+    _run_sensitivity_extractor(id_matrix, out_dir,
+        "pancancer_promoter_high_indel_no_pancreas", "ID83")
+
+
+def step3g_pancancer_cfs_extractor():
+    log(f"Step 3g: pan-cancer CFS Extractor (all {len(TUMORS)} tumors, SBS96 + ID83)")
+    out_dir = WORKDIR / "sensitivity" / "pancancer_cfs"
+    sbs_matrix = aggregate_cfs("SBS96")
+    id_matrix  = aggregate_cfs("ID83")
+    _run_sensitivity_extractor(sbs_matrix, out_dir, "pancancer_cfs", "SBS96")
+    _run_sensitivity_extractor(id_matrix,  out_dir, "pancancer_cfs", "ID83")
+
+
+# --- Step 6c: whole-genome SBS96 count hypermutator removal ---------------
+# Drop donors whose unfiltered whole-genome SBS96 mutation count exceeds
+# mean+2SD over the 658 PPP-HTG cohort. Single donor exclusion set is
+# applied uniformly to BOTH the SBS96 and ID83 pan-cancer matrices --
+# "hypermutator" is treated as a donor-level property and the SBS96
+# whole-genome count is the more sensitive marker. Implementation
+# decisions logged 2026-04-27 in docs/PLANNED_SENSITIVITY_STEPS.md §8.
+
+def _load_whole_genome_sbs_counts():
+    """pd.Series indexed by '<tumor>__<donor_id>', values = whole-genome
+    `unfiltered_sbs_muts` from each per-tumor metadata file."""
+    parts = []
+    for tumor in TUMORS:
+        meta = (ICGC_OUTPUTS / f"DCO__{TIMESTAMP_TAG}_{tumor}"
+                / f"{tumor}_metadata.tsv")
+        if not meta.exists():
+            log(f"  [WGS-count] missing metadata for {tumor}: {meta}")
+            continue
+        m = pd.read_csv(meta, sep="\t")
+        m = m.dropna(subset=["donor_id"])
+        m["__key"] = m["donor_id"].apply(lambda d: f"{tumor}__{d}")
+        parts.append(m.set_index("__key")["unfiltered_sbs_muts"])
+    if not parts:
+        return pd.Series(dtype=float)
+    return pd.concat(parts)
+
+
+def _identify_hypermutators_by_wgs_count(panc_sbs_matrix):
+    """Donors whose whole-genome SBS96 count exceeds mean+2SD over the
+    SBS96 pan-cancer matrix donors. Returns set or None on failure."""
+    if panc_sbs_matrix is None or not Path(panc_sbs_matrix).exists():
+        log(f"  ABORT: SBS96 pan-cancer matrix missing; "
+            f"can't define WGS-hyper cohort")
+        return None
+    panc = pd.read_csv(panc_sbs_matrix, sep="\t", index_col=0, nrows=1)
+    cohort = list(panc.columns)
+    log(f"  cohort (from SBS96 pan-cancer matrix): n={len(cohort)}")
+    counts_all = _load_whole_genome_sbs_counts()
+    if counts_all.empty:
+        log(f"  ABORT: no whole-genome SBS counts loaded from metadata files")
+        return None
+    counts = counts_all.reindex(cohort)
+    missing = counts[counts.isna()].index.tolist()
+    if missing:
+        log(f"  WARNING: {len(missing)} cohort donors missing from metadata: "
+            f"{missing}")
+    counts = counts.dropna()
+    mu, sd = float(counts.mean()), float(counts.std())
+    cutoff = mu + 2 * sd
+    hyper = set(counts[counts > cutoff].index)
+    log(f"  WGS SBS96 cohort: n={len(counts)}, mean={mu:.0f}, sd={sd:.0f}, "
+        f"cutoff={cutoff:.0f}")
+    log(f"  WGS-hyper donors (> cutoff): {len(hyper)} -> {sorted(hyper)}")
+    return hyper
+
+
+def _no_wgs_hyper_one(panc_matrix, kind, label, hyper_donors):
+    if panc_matrix is None or not Path(panc_matrix).exists():
+        log(f"  [{kind}] ABORT: pan-cancer matrix missing")
+        return
+    out_dir = WORKDIR / "sensitivity" / "pancancer_no_wgs_hyper"
+    maf_dir = out_dir / "maf"
+    filt_matrix = maf_dir / f"{label}_no_wgs_hyper.{KIND[kind]['matrix_ext']}"
+    extractor_out = out_dir / f"extractor_{kind}"
+
+    if cosmic_signatures_path(extractor_out, kind).exists():
+        log(f"  [{kind}] exists: {extractor_out}")
+        report_real_min_silhouette(extractor_out, f"{label}_no_wgs_hyper", kind)
+        report_trc_cosine(extractor_out, f"{label}_no_wgs_hyper", kind)
+        return
+
+    maf_dir.mkdir(parents=True, exist_ok=True)
+    df = pd.read_csv(panc_matrix, sep="\t", index_col=0)
+    n_in = df.shape[1]
+    keep = [c for c in df.columns if c not in hyper_donors]
+    drop = sorted(set(df.columns) - set(keep))
+    log(f"  [{kind}] cohort before: n={n_in}; "
+        f"dropping {len(drop)} WGS-hyper donor(s): {drop}")
+
+    df[keep].to_csv(filt_matrix, sep="\t")
+    log(f"  [{kind}] filtered matrix: {filt_matrix} ({len(keep)} samples)")
+
+    run_extractor(filt_matrix, extractor_out, f"{label}_no_wgs_hyper", kind)
+    report_real_min_silhouette(extractor_out, f"{label}_no_wgs_hyper", kind)
+    report_trc_cosine(extractor_out, f"{label}_no_wgs_hyper", kind)
+
+
+def step6c_no_wgs_hyper(panc_sbs_matrix, panc_id_matrix):
+    """Whole-genome SBS96 count hypermutator removal.
+
+    Defines a single donor exclusion set from whole-genome unfiltered
+    SBS96 counts (mean+2SD over the SBS96 pan-cancer cohort) and applies
+    it uniformly to both the SBS96 and ID83 pan-cancer matrices, then
+    reruns Extractor on each filtered matrix.
+    """
+    log("Step 6c: whole-genome SBS96 count hypermutator removal (SBS + ID)")
+    hyper = _identify_hypermutators_by_wgs_count(panc_sbs_matrix)
+    if hyper is None:
+        return
+    _no_wgs_hyper_one(panc_sbs_matrix, "SBS96", PANCANCER_LABEL, hyper)
+    _no_wgs_hyper_one(panc_id_matrix,  "ID83",  PANCANCER_INDEL_LABEL, hyper)
+
+
 # --- Ovary HRD exclusion ---------------------------------------------------
-# In ovary, HRD/SBS3 dominates and may mask SBS96B. After per-tumor Assignment,
-# drop ovary donors with SBS3 fraction > HRD_SBS3_THRESHOLD, regenerate the
-# ovary SBS96 matrix from a filtered MAF, and rerun Extractor.
+# In ovary, HRD/SBS3 dominates and may mask SBS96-TRC. Drop ovary donors
+# with SBS3 fraction > HRD_SBS3_THRESHOLD in the *unconstrained* ovary
+# Assignment, regenerate the ovary SBS96 matrix from a filtered MAF, and
+# rerun Extractor.
+#
+# Bug history: previously this function read SBS3 from the *constrained*
+# Assignment, which uses only the 10 COSMIC sigs that decompose to the
+# pan-cancer Extractor-derived signatures -- a set that does NOT include
+# SBS3. The "SBS3 not in columns" branch always fired and zero donors
+# were excluded. Fixed 2026-04-27 to read from the unconstrained
+# Assignment (full COSMIC v3.5, includes SBS3). See
+# docs/PLANNED_SENSITIVITY_STEPS.md §0.
 
 def step_ovary_hrd_exclusion():
     log("Ovary HRD exclusion: identify and remove SBS3-dominant donors")
     ovary_project = f"ovary_{PRIMARY_GROUP}"
 
+    # Bootstrap the unconstrained ovary Assignment if it doesn't exist
+    # (step7 only covers the pan-cancer aggregate by default).
+    ovary_unconstrained_dir = (
+        WORKDIR / "assignment" / f"{ovary_project}_unconstrained"
+    )
+    if not (ovary_unconstrained_dir / "Assignment_Solution").exists():
+        log(f"  ovary unconstrained Assignment missing -- running it now")
+        _unconstrained_one(
+            ovary_project, matgen_matrix_path(ovary_project, "SBS96"),
+            ovary_unconstrained_dir, "SBS96",
+        )
+
     activities_file = (
-        assignment_out_dir(ovary_project, "SBS96")
+        ovary_unconstrained_dir
         / "Assignment_Solution" / "Activities"
         / "Assignment_Solution_Activities.txt"
     )
     if not activities_file.exists():
-        log(f"  ABORT: ovary Assignment activities not found at {activities_file}")
+        log(f"  ABORT: ovary unconstrained Assignment activities not found at "
+            f"{activities_file}")
         return
 
     out_root = WORKDIR / "ovary_hrd_excluded"
@@ -782,6 +1260,7 @@ def step_ovary_hrd_exclusion():
     if cosmic_signatures_path(excl_extractor_out, "SBS96").exists():
         log(f"  exists: {excl_extractor_out}")
         report_real_min_silhouette(excl_extractor_out, excl_project, "SBS96")
+        report_trc_cosine(excl_extractor_out, excl_project, "SBS96")
         return
 
     act = pd.read_csv(activities_file, sep="\t", index_col=0)
@@ -790,7 +1269,11 @@ def step_ovary_hrd_exclusion():
         sbs3_frac = (act["SBS3"] / total).fillna(0.0)
         hrd_donors = set(sbs3_frac[sbs3_frac > HRD_SBS3_THRESHOLD].index)
     else:
-        log(f"  SBS3 not in attribution columns: {list(act.columns)}")
+        # With unconstrained Assignment + COSMIC v3.5, SBS3 should ALWAYS
+        # be one of the 97 columns. Reaching this branch indicates a
+        # broken upstream Assignment or a COSMIC version change.
+        log(f"  WARNING: SBS3 not in unconstrained columns: "
+            f"{list(act.columns)}")
         hrd_donors = set()
 
     n_total = len(act)
@@ -844,6 +1327,7 @@ def step_ovary_hrd_exclusion():
     # Rerun Extractor on the HRD-excluded ovary SBS96 matrix.
     run_extractor(sbs96, excl_extractor_out, excl_project, "SBS96")
     report_real_min_silhouette(excl_extractor_out, excl_project, "SBS96")
+    report_trc_cosine(excl_extractor_out, excl_project, "SBS96")
 
 
 # --- main -------------------------------------------------------------------
@@ -852,6 +1336,7 @@ def main():
     WORKDIR.mkdir(parents=True, exist_ok=True)
     log(f"WORKDIR = {WORKDIR}")
 
+    # --- Canonical pipeline ----------------------------------------------
     step1_convert_all()
     step2_matrix_generator()
     sbs_panc, id_panc = step3_aggregate_high()
@@ -865,9 +1350,21 @@ def main():
 
     step4b_per_tumor_extractor()
     step5_assignment(sbs_cosmic_db, id_cosmic_db)
-    step7_unconstrained_comparison()
-    step6_no_hyper(sbs_panc, id_panc)
-    step_ovary_hrd_exclusion()
+    step7_unconstrained_comparison()       # produces pan-cancer unconstrained
+                                           # activities used by step6b
+    step6_no_hyper(sbs_panc, id_panc)      # PPP-HTG count-based hyper removal
+
+    # --- Sensitivity / control steps (docs/PLANNED_SENSITIVITY_STEPS.md) -
+    step3b_aggregate_low()                 # HTG specificity (pan-cancer LTG)
+    step3c_pancancer_nonpromoter()         # PPP specificity (non-promoter)
+    step3d_liver_excluded()                # compositional bias: drop liver
+    step3e_equal_weight()                  # compositional bias: cap=50, seed=42
+    step3f_pancreas_excluded()             # compositional bias: drop pancreas
+    step3g_pancancer_cfs_extractor()       # unified mechanism (CFS, all 17)
+    step6b_no_mmr_pole(sbs_panc, id_panc)  # mechanism-based hyper removal
+    step6c_no_wgs_hyper(sbs_panc, id_panc) # whole-genome SBS-count hyper removal
+    step_ovary_hrd_exclusion()             # FIXED: reads SBS3 from
+                                           # ovary unconstrained Assignment
 
     log("DONE")
 
