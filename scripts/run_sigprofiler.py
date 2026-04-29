@@ -634,6 +634,33 @@ def make_capped_aggregate(kind, cap, seed, out_dir, out_label):
     return out_path
 
 
+def make_donor_excluded_aggregate(kind, donors_to_exclude, out_dir, out_label):
+    """Drop specific sample columns (full pan-cancer column names like
+    'ovary__DO35442') from the canonical pan-cancer aggregate matrix.
+    Returns the new matrix path or None if the source matrix is missing.
+    """
+    src = pancancer_matrix_path(kind)
+    out_path = out_dir / "maf" / f"{out_label}.{KIND[kind]['matrix_ext']}"
+    if out_path.exists():
+        log(f"  [{kind}] exists: {out_path}")
+        return out_path
+    if not src.exists():
+        log(f"  [{kind}] ABORT: source pan-cancer matrix missing: {src}")
+        return None
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    df = pd.read_csv(src, sep="\t", index_col=0)
+    n_in = df.shape[1]
+    drop_set = set(donors_to_exclude)
+    keep = [c for c in df.columns if c not in drop_set]
+    matched = sorted(set(df.columns) & drop_set)
+    requested = len(drop_set)
+    log(f"  [{kind}] excluding {len(matched)}/{requested} requested donors: "
+        f"{len(keep)}/{n_in} samples remain")
+    df[keep].to_csv(out_path, sep="\t")
+    log(f"  [{kind}] wrote {out_path}")
+    return out_path
+
+
 # --- TRC component identification & cosine reporting ------------------------
 
 def _pancancer_de_novo_signatures_path(kind):
@@ -1433,6 +1460,66 @@ def step17_ovary_hrd_exclusion():
     report_trc_cosine(excl_extractor_out, excl_project, "SBS96")
 
 
+# --- Step 18: Pan-cancer rerun with ovary HRD donors excluded --------------
+# Step 17 reruns the Extractor on the *ovary-alone* HRD-excluded matrix
+# (n=42), which gives a per-tumor sensitivity check on what the ovary
+# signature looks like after HRD removal. Step 18 is different: it drops
+# the same SBS3>50% ovary donors from the *pan-cancer* aggregate and
+# reruns the pan-cancer SBS96 + ID83 Extractors. This is the
+# manuscript-relevant test:
+#   1. Robustness of pan-cancer SBS96-TRC -- cosine to the original
+#      658-donor SBS96-TRC after dropping 47 HRD donors. Expected high
+#      (>= 0.95) if SBS96-TRC is independent of HRD contamination.
+#   2. Drops SBS3 from the COSMIC pairwise novelty list -- currently
+#      SBS3 is rank-2 closest match (cosine 0.7027) because the HRD
+#      donors pull the de novo signature toward SBS3's spectrum. Without
+#      them, the rank-2 hit should change and the "no COSMIC sig
+#      exceeds 0.80" novelty claim becomes cleaner.
+#
+# Reuses the same SBS3 source and threshold as step 17 -- reads donors
+# from per-tumor ovary's COSMIC-decomposed Activities (step 16 output).
+
+def step18_ovary_hrd_excluded():
+    log("Step 18: ovary-HRD-excluded pan-cancer Extractor (SBS96 + ID83)")
+    ovary_project = f"ovary_{PRIMARY_GROUP}"
+
+    activities_file = (
+        WORKDIR / "per_tumor" / ovary_project / "extractor" / "SBS96"
+        / "Suggested_Solution" / "COSMIC_SBS96_Decomposed_Solution"
+        / "Activities" / "COSMIC_SBS96_Activities.txt"
+    )
+    if not activities_file.exists():
+        log(f"  ABORT: per-tumor ovary COSMIC-decomposed Activities not found "
+            f"at {activities_file}. Has step 16 (per-tumor Extractor) run for ovary?")
+        return
+
+    act = pd.read_csv(activities_file, sep="\t", index_col=0)
+    if "SBS3" not in act.columns:
+        log(f"  ABORT: SBS3 not in per-tumor decomposed Activities columns: "
+            f"{list(act.columns)}.")
+        return
+    total = act.sum(axis=1).replace(0, pd.NA)
+    sbs3_frac = (act["SBS3"] / total).fillna(0.0)
+    hrd_donor_ids = sorted(sbs3_frac[sbs3_frac > HRD_SBS3_THRESHOLD].index)
+    hrd_columns = {f"ovary__{d}" for d in hrd_donor_ids}
+    log(f"  ovary HRD donors to exclude (SBS3>{HRD_SBS3_THRESHOLD:.0%}): "
+        f"{len(hrd_donor_ids)}")
+
+    out_dir = WORKDIR / "sensitivity" / "pancancer_no_ovary_hrd"
+    sbs_matrix = make_donor_excluded_aggregate(
+        "SBS96", hrd_columns, out_dir,
+        "pancancer_promoter_high_no_ovary_hrd",
+    )
+    id_matrix = make_donor_excluded_aggregate(
+        "ID83", hrd_columns, out_dir,
+        "pancancer_promoter_high_indel_no_ovary_hrd",
+    )
+    _run_sensitivity_extractor(sbs_matrix, out_dir,
+        "pancancer_promoter_high_no_ovary_hrd", "SBS96")
+    _run_sensitivity_extractor(id_matrix, out_dir,
+        "pancancer_promoter_high_indel_no_ovary_hrd", "ID83")
+
+
 # --- main -------------------------------------------------------------------
 
 def main():
@@ -1466,9 +1553,10 @@ def main():
     step14_no_mmr_pole(sbs_panc, id_panc)    # mechanism-based (needs step 12)
     step15_no_wgs_hyper(sbs_panc, id_panc)   # whole-genome SBS96 count-based
 
-    # --- Per-tumor + subset (steps 16-17) -------------------------------
+    # --- Per-tumor + subset (steps 16-18) -------------------------------
     step16_per_tumor_extractor()             # PPP-HTG vs PPP-LTG validation
-    step17_ovary_hrd_exclusion()             # uses step 16 ovary Activities
+    step17_ovary_hrd_exclusion()             # ovary-alone, uses step 16 Activities
+    step18_ovary_hrd_excluded()              # pan-cancer rerun, drops 47 HRD donors
 
     log("DONE")
 
