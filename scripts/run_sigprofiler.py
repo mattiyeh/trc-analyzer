@@ -1520,6 +1520,65 @@ def step18_ovary_hrd_excluded():
         "pancancer_promoter_high_indel_no_ovary_hrd", "ID83")
 
 
+# --- Step 19: Within-cohort non-promoter SBS96 Extractor -------------------
+# Step 6 ran a non-promoter SBS96 Extractor on 1,785 samples — a different
+# cohort from PPP-HTG (658 donors): includes 4 no-expression tumors
+# (esophagus, gallbladder, kidney, PNET) and mutation-only donors that
+# the all-muts switch made visible. So step 6's negative-control reading
+# ("PPP-specificity holds: non-promoter does not yield SBS96-TRC") is
+# *informative* but not a perfectly-matched cohort comparison.
+#
+# Step 19 fixes that: it subsets the non-promoter SBS96 matrix to ONLY
+# the donor columns that also appear in the canonical PPP-HTG aggregate
+# (~658 donors). Runs the Extractor on that subset. Same compartment
+# difference, same donor pool — isolates the *compartment* effect from
+# the *cohort* effect.
+#
+# Pass criterion: same as step 6 — closest cosine to canonical SBS96-TRC
+# < 0.85. If a TRC-like component re-emerges in the matched cohort,
+# the negative-control argument weakens.
+
+def step19_nonpromoter_htg_donors_extractor():
+    log("Step 19: within-cohort non-promoter SBS96 Extractor "
+        "(non-promoter mutations restricted to PPP-HTG donor cohort)")
+    out_dir   = WORKDIR / "sensitivity" / "pancancer_nonpromoter_htg_donors"
+    out_label = "pancancer_non_promoter_htg_donors"
+    out_path  = out_dir / "maf" / f"{out_label}.{KIND['SBS96']['matrix_ext']}"
+    extractor_out = out_dir / "extractor_SBS96"
+
+    if cosmic_signatures_path(extractor_out, "SBS96").exists():
+        log(f"  exists: {extractor_out}")
+        report_real_min_silhouette(extractor_out, out_label, "SBS96")
+        report_trc_cosine(extractor_out, out_label, "SBS96")
+        return
+
+    htg_src     = pancancer_matrix_path("SBS96")
+    nonprom_src = (WORKDIR / "sensitivity" / "pancancer_nonpromoter" / "maf"
+                   / f"pancancer_non_promoter.{KIND['SBS96']['matrix_ext']}")
+    if not htg_src.exists():
+        log(f"  ABORT: canonical PPP-HTG matrix missing: {htg_src}")
+        return
+    if not nonprom_src.exists():
+        log(f"  ABORT: non-promoter aggregate matrix missing: {nonprom_src}. "
+            f"Has step 6 (or its aggregator) run?")
+        return
+
+    if not out_path.exists():
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        htg_cols = set(pd.read_csv(htg_src, sep="\t", index_col=0, nrows=0).columns)
+        nonprom  = pd.read_csv(nonprom_src, sep="\t", index_col=0)
+        n_in     = nonprom.shape[1]
+        keep     = [c for c in nonprom.columns if c in htg_cols]
+        log(f"  intersect: {len(keep)}/{n_in} non-promoter samples are in PPP-HTG cohort")
+        if len(keep) == 0:
+            log(f"  ABORT: zero overlap between non-promoter and PPP-HTG cohorts")
+            return
+        nonprom[keep].to_csv(out_path, sep="\t")
+        log(f"  wrote {out_path} ({len(keep)} samples)")
+
+    _run_sensitivity_extractor(out_path, out_dir, out_label, "SBS96")
+
+
 # --- main -------------------------------------------------------------------
 
 def main():
@@ -1553,10 +1612,11 @@ def main():
     step14_no_mmr_pole(sbs_panc, id_panc)    # mechanism-based (needs step 12)
     step15_no_wgs_hyper(sbs_panc, id_panc)   # whole-genome SBS96 count-based
 
-    # --- Per-tumor + subset (steps 16-18) -------------------------------
+    # --- Per-tumor + subset (steps 16-19) -------------------------------
     step16_per_tumor_extractor()             # PPP-HTG vs PPP-LTG validation
     step17_ovary_hrd_exclusion()             # ovary-alone, uses step 16 Activities
     step18_ovary_hrd_excluded()              # pan-cancer rerun, drops 47 HRD donors
+    step19_nonpromoter_htg_donors_extractor()  # within-cohort non-promoter (step 6 cleanup)
 
     log("DONE")
 
