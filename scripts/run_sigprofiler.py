@@ -1579,6 +1579,71 @@ def step19_nonpromoter_htg_donors_extractor():
     _run_sensitivity_extractor(out_path, out_dir, out_label, "SBS96")
 
 
+# --- Step 20: Within-cohort CFS SBS96 Extractor ----------------------------
+# Step 7 ran the CFS Extractor on all 17 tumors (1,694 samples) including
+# esophagus, gallbladder, kidney, PNET (no-expression tumors) and
+# mutation-only donors visible after the all-muts switch. Partial result
+# at k=4 (2026-04-29): the closest CFS component is SBS40a-dominated
+# (cos 0.85 to SBS40a alone, cos 0.83 to canonical SBS96-TRC) -- the
+# higher single-COSMIC cos means the component is best explained as
+# SBS40a, not TRC re-emerging. Other k=4 components are clock/dMMR/SBS17b
+# (esophageal-driven).
+#
+# Step 20 fixes the cohort confound: subset the CFS SBS96 matrix to ONLY
+# the 658 PPP-HTG donor columns (intersection = 657; one breast donor
+# has no CFS row), then rerun the Extractor on that within-cohort matrix.
+# Same compartment difference as step 7, same donor pool as step 4 (PPP-
+# HTG canonical) -- this is the cleanest unified-mechanism test at the
+# spectrum level. Compares "spectrum of CFS mutations in PPP-HTG donors"
+# to "spectrum of PPP-HTG mutations in PPP-HTG donors" (canonical SBS96-
+# TRC).
+#
+# Pass criterion: closest cosine of any de novo component to canonical
+# SBS96-TRC > 0.85 AND that cosine exceeds the closest single-COSMIC
+# match for the same component (so it's not just SBS40a-driven). If
+# both hold, the unified-mechanism claim is supported at spectrum level.
+
+def step20_cfs_htg_donors_extractor():
+    log("Step 20: within-cohort CFS SBS96 Extractor "
+        "(CFS mutations restricted to PPP-HTG donor cohort)")
+    out_dir   = WORKDIR / "sensitivity" / "pancancer_cfs_htg_donors"
+    out_label = "pancancer_cfs_htg_donors"
+    out_path  = out_dir / "maf" / f"{out_label}.{KIND['SBS96']['matrix_ext']}"
+    extractor_out = out_dir / "extractor_SBS96"
+
+    if cosmic_signatures_path(extractor_out, "SBS96").exists():
+        log(f"  exists: {extractor_out}")
+        report_real_min_silhouette(extractor_out, out_label, "SBS96")
+        report_trc_cosine(extractor_out, out_label, "SBS96")
+        return
+
+    htg_src = pancancer_matrix_path("SBS96")
+    cfs_src = (WORKDIR / "sensitivity" / "pancancer_cfs" / "maf"
+               / f"pancancer_cfs.{KIND['SBS96']['matrix_ext']}")
+    if not htg_src.exists():
+        log(f"  ABORT: canonical PPP-HTG matrix missing: {htg_src}")
+        return
+    if not cfs_src.exists():
+        log(f"  ABORT: CFS aggregate matrix missing: {cfs_src}. "
+            f"Has step 7 (or its aggregator) run?")
+        return
+
+    if not out_path.exists():
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        htg_cols = set(pd.read_csv(htg_src, sep="\t", index_col=0, nrows=0).columns)
+        cfs      = pd.read_csv(cfs_src, sep="\t", index_col=0)
+        n_in     = cfs.shape[1]
+        keep     = [c for c in cfs.columns if c in htg_cols]
+        log(f"  intersect: {len(keep)}/{n_in} CFS samples are in PPP-HTG cohort")
+        if len(keep) == 0:
+            log(f"  ABORT: zero overlap between CFS and PPP-HTG cohorts")
+            return
+        cfs[keep].to_csv(out_path, sep="\t")
+        log(f"  wrote {out_path} ({len(keep)} samples)")
+
+    _run_sensitivity_extractor(out_path, out_dir, out_label, "SBS96")
+
+
 # --- main -------------------------------------------------------------------
 
 def main():
@@ -1612,11 +1677,12 @@ def main():
     step14_no_mmr_pole(sbs_panc, id_panc)    # mechanism-based (needs step 12)
     step15_no_wgs_hyper(sbs_panc, id_panc)   # whole-genome SBS96 count-based
 
-    # --- Per-tumor + subset (steps 16-19) -------------------------------
+    # --- Per-tumor + subset (steps 16-20) -------------------------------
     step16_per_tumor_extractor()             # PPP-HTG vs PPP-LTG validation
     step17_ovary_hrd_exclusion()             # ovary-alone, uses step 16 Activities
     step18_ovary_hrd_excluded()              # pan-cancer rerun, drops 47 HRD donors
     step19_nonpromoter_htg_donors_extractor()  # within-cohort non-promoter (step 6 cleanup)
+    step20_cfs_htg_donors_extractor()        # within-cohort CFS (step 7 cleanup)
 
     log("DONE")
 
