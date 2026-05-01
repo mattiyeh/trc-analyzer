@@ -683,8 +683,31 @@ def _pancancer_de_novo_signatures_path(kind):
             / f"{sub}_De-Novo_Signatures.txt")
 
 
+def _stopped_k(extractor_out):
+    """Return chosen k (int) if <extractor_out>/STOPPED.txt exists, else None.
+
+    Why: SigProfilerExtractor only writes Suggested_Solution/ after the full
+    k-sweep finishes. If a run is truncated (e.g. OOM at high k) but the
+    stability cliff is already resolved at a lower k in All_Solutions/, we
+    accept that k as final. STOPPED.txt holds a single integer on the first
+    line.
+    """
+    p = Path(extractor_out) / "STOPPED.txt"
+    if not p.exists():
+        return None
+    try:
+        return int(p.read_text().strip().split()[0])
+    except (ValueError, IndexError):
+        return None
+
+
 def _sensitivity_de_novo_signatures_path(extractor_out, kind):
     sub = KIND[kind]["extractor_subdir"]
+    k = _stopped_k(extractor_out)
+    if k is not None:
+        return (Path(extractor_out) / sub / "All_Solutions"
+                / f"{sub}_{k}_Signatures" / "Signatures"
+                / f"{sub}_S{k}_Signatures.txt")
     return (Path(extractor_out) / sub / "Suggested_Solution"
             / f"{sub}_De-Novo_Solution" / "Signatures"
             / f"{sub}_De-Novo_Signatures.txt")
@@ -875,6 +898,12 @@ def _run_sensitivity_extractor(matrix_path, out_dir, label, kind):
     if matrix_path is None:
         return
     extractor_out = out_dir / f"extractor_{kind}"
+    stopped_k = _stopped_k(extractor_out)
+    if stopped_k is not None:
+        log(f"  [{kind}] STOPPED at k={stopped_k}: {extractor_out}")
+        report_real_min_silhouette(extractor_out, label, kind)
+        report_trc_cosine(extractor_out, label, kind)
+        return
     if cosmic_signatures_path(extractor_out, kind).exists():
         log(f"  [{kind}] exists: {extractor_out}")
         report_real_min_silhouette(extractor_out, label, kind)
@@ -1719,43 +1748,59 @@ def main():
     WORKDIR.mkdir(parents=True, exist_ok=True)
     log(f"WORKDIR = {WORKDIR}")
 
-    # --- Setup (steps 1-3) -----------------------------------------------
+    # Execution order is *results-first*: Assignment (which feeds figures)
+    # runs as early as its dependencies allow, before slow sensitivity
+    # Extractors. Step 21 (non-promoter ID83) is deferred to last because
+    # the very-sparse non-promoter ID83 matrix has the same OOM profile
+    # that took down step 7 ID83 on 2026-05-01 -- if it crashes again,
+    # everything upstream has already finished.
+    # Numerical step labels (step1..step22) are preserved across reorders
+    # so that SENSITIVITY_RESULTS_2026.md stays canonical.
+
+    # --- Setup ------------------------------------------------------------
     step1_convert_all()
     step2_matrix_generator()
     sbs_panc, id_panc = step3_aggregate_high()
     _sanity_check_after_step3()
 
-    # --- Pan-cancer Extractors -- compartment specificity (steps 4-7) ---
+    # --- Pan-cancer Extractor + Assignment (results-first block) ----------
     sbs_cosmic_db, id_cosmic_db = step4_pancancer_extractor(sbs_panc, id_panc)
-    step5_pancancer_low_extractor()          # PPP-LTG (PPP-HTG specificity)
-    step6_pancancer_nonpromoter_extractor()  # non-promoter (PPP specificity)
-    step7_pancancer_cfs_extractor()          # CFS (unified mechanism, all 17)
-
-    # --- Pan-cancer Extractors -- compositional bias (steps 8-10) -------
-    step8_liver_excluded()                   # drop liver
-    step9_pancreas_excluded()                # drop pancreas
-    step10_equal_weight()                    # cap=50, seed=42
-
-    # --- Assignment (steps 11-12) ---------------------------------------
     step11_constrained_assignment(sbs_cosmic_db, id_cosmic_db)
     _sanity_check_after_step11()
     step12_unconstrained_assignment()        # required by step 14
 
-    # --- Pan-cancer Extractors -- hypermutator subsets (steps 13-15) ----
+    # --- Fast / standalone work (unblock figure generation) ---------------
+    step22_validation_kos()                  # Zou 2021 KO subclones (independent)
+    step10_equal_weight()                    # cap=50, seed=42 (smallest pending Extractor)
+
+    # --- Hypermutator-subset sensitivity (medium) -------------------------
     step13_no_hyper(sbs_panc, id_panc)       # count-based (mean+2SD)
     step14_no_mmr_pole(sbs_panc, id_panc)    # mechanism-based (needs step 12)
     step15_no_wgs_hyper(sbs_panc, id_panc)   # whole-genome SBS96 count-based
 
-    # --- Per-tumor + subset (steps 16-20) -------------------------------
+    # --- Compartment specificity (steps 5-7) ------------------------------
+    step5_pancancer_low_extractor()          # PPP-LTG (PPP-HTG specificity)
+    step6_pancancer_nonpromoter_extractor()  # non-promoter (PPP specificity)
+    step7_pancancer_cfs_extractor()          # CFS (unified mechanism, all 17)
+
+    # --- Per-tumor + ovary HRD chain --------------------------------------
     step16_per_tumor_extractor()             # PPP-HTG vs PPP-LTG validation
     step17_ovary_hrd_exclusion()             # ovary-alone, uses step 16 Activities
     step18_ovary_hrd_excluded()              # pan-cancer rerun, drops 47 HRD donors
+
+    # --- Within-cohort variants -------------------------------------------
     step19_nonpromoter_htg_donors_extractor()  # within-cohort non-promoter (step 6 cleanup)
     step20_cfs_htg_donors_extractor()        # within-cohort CFS (step 7 cleanup)
-    step21_pancancer_nonpromoter_id_extractor()  # non-promoter ID83 (Fig 2 gap fill)
 
-    # --- KO validation (step 22) ----------------------------------------
-    step22_validation_kos()                       # Zou 2021 KO subclones
+    # --- Excluded-tumor pan-cancer (slow) ---------------------------------
+    step8_liver_excluded()                   # drop liver
+    step9_pancreas_excluded()                # drop pancreas
+
+    # --- OOM-risky last ---------------------------------------------------
+    # step 21 is non-promoter ID83 -- same sparse high-k OOM profile that
+    # crashed step 7 ID83 on 2026-05-01. Run last so a crash doesn't
+    # block earlier results.
+    step21_pancancer_nonpromoter_id_extractor()
 
     log("DONE")
 
