@@ -37,6 +37,14 @@ Pan-cancer Extractors -- hypermutator subsets (13-15):
        > mean+2SD over the PPP-HTG cohort. Single donor exclusion set
        applied to both SBS96 and ID83.
 
+KO validation (22):
+  22.  Per-subclone constrained Assignment of Zou 2021 (Nik-Zainal) KO
+       iPSC subclones (RECQL5, SETX, ATP2B4 + comparator panel) against
+       COSMIC v3.5 + SBS96-TRC + SBS96B. Tests whether knocking out a
+       TRC-resolution helicase recovers the SBS96-TRC signature in vitro
+       -- the mechanistic-causation half of the validation logic.
+       Standalone runner: validation/run_validation.py.
+
 Per-tumor + subset analyses (16-17):
   16.  Per-tumor SBS96 Extractor on each tumor's promoter_high and
        promoter_low matrices (PPP-HTG vs PPP-LTG validation).
@@ -1644,6 +1652,67 @@ def step20_cfs_htg_donors_extractor():
     _run_sensitivity_extractor(out_path, out_dir, out_label, "SBS96")
 
 
+# --- Step 21: Pan-cancer non-promoter ID83 Extractor ----------------------
+# Step 6 ran the non-promoter Extractor on SBS96 only — when the
+# PPP-specificity control was pre-registered (legacy label 3c), it was
+# scoped as a SBS-only test. This left a gap in Fig 2's compartment-
+# specificity matrix: the non-promoter row has SBS-TRC and SBS-BG cells
+# but the ID-TRC and ID-BG cells are blank.
+#
+# Step 21 closes that gap. Per-tumor non-promoter ID83 matrices already
+# exist (step 2 MatrixGenerator produced them) — we just need to
+# aggregate them into a pan-cancer non-promoter ID83 matrix and run an
+# Extractor on it. Same pattern as step 7 (CFS Extractor) but on
+# non-promoter regions.
+#
+# Pass criterion: same as step 6 SBS96 — the PPP-specificity control
+# expects NO extracted ID83 component to reach cosine ≥ 0.85 to
+# canonical pan-cancer ID83-TRC. If a TRC-like ID component DOES
+# emerge, that's a finding (would suggest indel TRC biology operates
+# more broadly than substitution TRC biology).
+
+def step21_pancancer_nonpromoter_id_extractor():
+    log("Step 21: pan-cancer non-promoter ID83 Extractor (PPP specificity, ID)")
+    out_dir = WORKDIR / "sensitivity" / "pancancer_nonpromoter"
+    id_matrix = aggregate_nonpromoter("ID83")
+    _run_sensitivity_extractor(id_matrix, out_dir,
+                                "pancancer_non_promoter", "ID83")
+
+
+# --- Step 22: Zou KO validation (constrained Assignment with TRC ref) -----
+# Tests whether SBS96-TRC -- defined from ICGC PPP-HTG mutations -- is
+# recovered in subclones knocked out for TRC-resolution helicases (RECQL5,
+# SETX, ATP2B4) from the Zou et al. 2021 (Nik-Zainal) iPSC KO catalogue.
+# Comparator panel: WRN/PIF1 (other helicases -- specificity control),
+# TP53/ATM/NHEJ1/XRCC4/REV1 (low-burden non-TRC -- negative control),
+# MSH6 (MMR positive sanity, expected to load on SBS6/14/etc, not TRC).
+#
+# Per-subclone constrained Assignment against COSMIC v3.5 + SBS96-TRC +
+# SBS96B (the two pan-cancer step-4 de novo signatures appended to
+# COSMIC). The standalone runner is `validation/run_validation.py`; this
+# step thin-wraps it so the analysis is part of the pipeline graph.
+
+def step22_validation_kos():
+    log("Step 22: Zou KO validation (constrained Assignment with SBS96-TRC ref)")
+    out_dir = WORKDIR / "validation_kos"
+    final_tsv = out_dir / "validation_ko_activities.tsv"
+    if final_tsv.exists():
+        log(f"  exists: {final_tsv}")
+        return
+    import subprocess
+    runner = REPO_ROOT / "validation" / "run_validation.py"
+    if not runner.exists():
+        log(f"  SKIP: runner missing at {runner}")
+        return
+    out_dir.mkdir(parents=True, exist_ok=True)
+    log(f"  invoking {runner}")
+    subprocess.run(
+        ["python3", str(runner)],
+        check=True,
+        cwd=str(REPO_ROOT),
+    )
+
+
 # --- main -------------------------------------------------------------------
 
 def main():
@@ -1683,6 +1752,10 @@ def main():
     step18_ovary_hrd_excluded()              # pan-cancer rerun, drops 47 HRD donors
     step19_nonpromoter_htg_donors_extractor()  # within-cohort non-promoter (step 6 cleanup)
     step20_cfs_htg_donors_extractor()        # within-cohort CFS (step 7 cleanup)
+    step21_pancancer_nonpromoter_id_extractor()  # non-promoter ID83 (Fig 2 gap fill)
+
+    # --- KO validation (step 22) ----------------------------------------
+    step22_validation_kos()                       # Zou 2021 KO subclones
 
     log("DONE")
 
