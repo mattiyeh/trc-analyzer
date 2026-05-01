@@ -1773,6 +1773,14 @@ def main():
     step22_validation_kos()                  # Zou 2021 KO subclones (independent)
     step10_equal_weight()                    # cap=50, seed=42 (smallest pending Extractor)
 
+    # --- Per-tumor + ovary HRD chain (16/17 already cached; 18 figure-impactful) -
+    # Step 18 (pan-cancer rerun w/o ovary HRD donors) is the single most
+    # figure-impactful pending Extractor: it drops SBS3 from the novelty
+    # pairwise top hits. ID side is only 316 donors -- finishes fast.
+    step16_per_tumor_extractor()             # PPP-HTG vs PPP-LTG validation
+    step17_ovary_hrd_exclusion()             # ovary-alone, uses step 16 Activities
+    step18_ovary_hrd_excluded()              # pan-cancer rerun, drops 47 HRD donors
+
     # --- Hypermutator-subset sensitivity (medium) -------------------------
     step13_no_hyper(sbs_panc, id_panc)       # count-based (mean+2SD)
     step14_no_mmr_pole(sbs_panc, id_panc)    # mechanism-based (needs step 12)
@@ -1782,11 +1790,6 @@ def main():
     step5_pancancer_low_extractor()          # PPP-LTG (PPP-HTG specificity)
     step6_pancancer_nonpromoter_extractor()  # non-promoter (PPP specificity)
     step7_pancancer_cfs_extractor()          # CFS (unified mechanism, all 17)
-
-    # --- Per-tumor + ovary HRD chain --------------------------------------
-    step16_per_tumor_extractor()             # PPP-HTG vs PPP-LTG validation
-    step17_ovary_hrd_exclusion()             # ovary-alone, uses step 16 Activities
-    step18_ovary_hrd_excluded()              # pan-cancer rerun, drops 47 HRD donors
 
     # --- Within-cohort variants -------------------------------------------
     step19_nonpromoter_htg_donors_extractor()  # within-cohort non-promoter (step 6 cleanup)
