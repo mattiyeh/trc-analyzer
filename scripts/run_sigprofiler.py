@@ -114,7 +114,11 @@ PER_TUMOR_GROUPS = ["promoter_high", "promoter_low"]
 HRD_SBS3_THRESHOLD = 0.50
 
 # Equal-weight (step 10) compositional rebalancing parameters.
-EQUAL_WEIGHT_CAP  = 50
+EQUAL_WEIGHT_CAP       = 50    # original aggressive rebalance
+EQUAL_WEIGHT_CAP_HIGH  = 100   # step 23 — moderate rebalance, added 2026-05-01
+                                # to recover ID83 statistical power (cap=50
+                                # leaves 751 indels, below SigProfiler's
+                                # bootstrap-stability threshold for k=2)
 EQUAL_WEIGHT_SEED = 42
 
 # Tumors to exclude in single-tumor sensitivity steps.
@@ -991,6 +995,32 @@ def step10_equal_weight():
         f"pancancer_capped{EQUAL_WEIGHT_CAP}_indel", "ID83")
 
 
+# --- Step 23: equal-weight at cap=100 (moderate rebalance) ------------------
+# Added 2026-05-01 after step 10 cap=50 left ID83 cohort at 751 indels — below
+# SigProfiler's bootstrap-stability threshold for k=2. cap=100 keeps the
+# liver/ovary/pancreas combined share at ~57% (vs ~42% at cap=50, ~70%
+# uncapped), preserving meaningful compositional rebalance while restoring
+# statistical power for both modalities. Mirrors step 10 verbatim except
+# the cap value.
+
+def step23_equal_weight_cap100():
+    log(f"Step 23: equal-weight pan-cancer Extractor (moderate rebalance) "
+        f"(cap={EQUAL_WEIGHT_CAP_HIGH}, seed={EQUAL_WEIGHT_SEED}, SBS96 + ID83)")
+    out_dir = WORKDIR / "sensitivity" / f"pancancer_capped{EQUAL_WEIGHT_CAP_HIGH}"
+    sbs_matrix = make_capped_aggregate(
+        "SBS96", EQUAL_WEIGHT_CAP_HIGH, EQUAL_WEIGHT_SEED, out_dir,
+        f"pancancer_promoter_high_capped{EQUAL_WEIGHT_CAP_HIGH}_seed{EQUAL_WEIGHT_SEED}",
+    )
+    id_matrix = make_capped_aggregate(
+        "ID83", EQUAL_WEIGHT_CAP_HIGH, EQUAL_WEIGHT_SEED, out_dir,
+        f"pancancer_promoter_high_indel_capped{EQUAL_WEIGHT_CAP_HIGH}_seed{EQUAL_WEIGHT_SEED}",
+    )
+    _run_sensitivity_extractor(sbs_matrix, out_dir,
+        f"pancancer_capped{EQUAL_WEIGHT_CAP_HIGH}", "SBS96")
+    _run_sensitivity_extractor(id_matrix, out_dir,
+        f"pancancer_capped{EQUAL_WEIGHT_CAP_HIGH}_indel", "ID83")
+
+
 # --- Step 11: constrained Assignment ----------------------------------------
 
 def _assign(label, matrix_path, out_dir, cosmic_db, kind):
@@ -1804,6 +1834,11 @@ def main():
     # crashed step 7 ID83 on 2026-05-01. Run last so a crash doesn't
     # block earlier results.
     step21_pancancer_nonpromoter_id_extractor()
+
+    # --- Compositional-bias robustness (added 2026-05-01) -----------------
+    # Step 23 = equal-weight cap=100 rerun, complementing step 10 cap=50.
+    # Justification documented at the function definition.
+    step23_equal_weight_cap100()
 
     log("DONE")
 
