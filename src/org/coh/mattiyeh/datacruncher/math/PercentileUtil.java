@@ -17,10 +17,4 @@ public class PercentileUtil {
 		return new Percentile().evaluate(levelsAsArray, nthPercentile);
 	}
 
-	public static double calculateNthPercentile2(List<Double> data, double nthPercentile) {
-		data.sort(Comparator.naturalOrder());
-	    int index = (int) Math.ceil(nthPercentile / 100.0 * data.size());
-	    return data.get(index-1);
-	}
-	
 }

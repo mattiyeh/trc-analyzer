@@ -407,6 +407,25 @@ def matgen_matrix_path(project, kind):
     )
 
 
+def _maf_has_data_rows(maf):
+    """Return True if MAF has at least one data row beyond the header.
+
+    Empty/header-only MAFs (e.g. esophagus/gallbladder/kidney/PNET PPP
+    groups, which have no expression data; prostate_promoter_high, which
+    has zero PPP-HTG mutations; any *_promoter_zero subset that came up
+    empty for a tumor) cause MatrixGenerator to write no matrix file --
+    so a naive `not matrix.exists()` cache check re-runs matgen on those
+    projects every invocation. Gate on data-row presence instead.
+    """
+    if not maf.exists():
+        return False
+    with open(maf) as f:
+        for i, _ in enumerate(f):
+            if i >= 1:
+                return True
+    return False
+
+
 def step2_matrix_generator():
     log("Step 2: SigProfilerMatrixGenerator (SBS96 + ID83)")
     import shutil
@@ -424,8 +443,8 @@ def step2_matrix_generator():
             sbs96   = matgen_matrix_path(project, "SBS96")
             id83    = matgen_matrix_path(project, "ID83")
 
-            need_sbs = sbs_maf.exists() and not sbs96.exists()
-            need_id  = id_maf.exists()  and not id83.exists()
+            need_sbs = _maf_has_data_rows(sbs_maf) and not sbs96.exists()
+            need_id  = _maf_has_data_rows(id_maf)  and not id83.exists()
             if not (need_sbs or need_id):
                 continue
             if not (sbs_maf.exists() or id_maf.exists()):
@@ -1232,6 +1251,12 @@ def _no_mmr_pole_one(panc_matrix, kind, label, hyper_donors):
     filt_matrix = maf_dir / f"{label}_no_mmr_pole.{KIND[kind]['matrix_ext']}"
     extractor_out = out_dir / f"extractor_{kind}"
 
+    stopped_k = _stopped_k(extractor_out)
+    if stopped_k is not None:
+        log(f"  [{kind}] STOPPED at k={stopped_k}: {extractor_out}")
+        report_real_min_silhouette(extractor_out, f"{label}_no_mmr_pole", kind)
+        report_trc_cosine(extractor_out, f"{label}_no_mmr_pole", kind)
+        return
     if cosmic_signatures_path(extractor_out, kind).exists():
         log(f"  [{kind}] exists: {extractor_out}")
         report_real_min_silhouette(extractor_out, f"{label}_no_mmr_pole", kind)

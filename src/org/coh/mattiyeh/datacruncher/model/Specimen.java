@@ -1,9 +1,9 @@
 package org.coh.mattiyeh.datacruncher.model;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import org.coh.mattiyeh.datacruncher.math.Operator;
@@ -27,7 +27,15 @@ public class Specimen {
 		this.specimenType = specimenType;
 		this.specimenSubtype = specimenSubType;
 		this.donorTreatmentType = donorTreatmentType;
-		samples = new HashMap<>();
+		// TreeMap (not HashMap) so getMutationSample / getExpressionSample
+		// iterate samples in deterministic sampleId-sorted order. ICGC has
+		// 178 of 2,814 specimens (6.3%) with >1 mutation-bearing sample;
+		// HashMap iteration order across JVMs would let those specimens
+		// pick a different sample on different runs, which is the most
+		// plausible explanation for the small (~0.04%) cell-level drift
+		// between the 2023 and 2026 SBS96 matrices documented in
+		// docs/MATRIX_COMPARISON.md.
+		samples = new TreeMap<>();
 	}
 
 	public String getSpecimenId() {
