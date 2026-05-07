@@ -1612,47 +1612,61 @@ def step18_ovary_hrd_excluded():
         "pancancer_promoter_high_indel_no_ovary_hrd", "ID83")
 
 
-# --- Step 19: Within-cohort non-promoter SBS96 Extractor -------------------
+# --- Step 19: Within-cohort non-promoter Extractor (SBS96 + ID83) ----------
 # Step 6 ran a non-promoter SBS96 Extractor on 1,785 samples — a different
 # cohort from PPP-HTG (658 donors): includes 4 no-expression tumors
 # (esophagus, gallbladder, kidney, PNET) and mutation-only donors that
 # the all-muts switch made visible. So step 6's negative-control reading
 # ("PPP-specificity holds: non-promoter does not yield SBS96-TRC") is
-# *informative* but not a perfectly-matched cohort comparison.
+# *informative* but not a perfectly-matched cohort comparison. Step 21
+# similarly ran the non-promoter ID83 Extractor on the broader cohort.
 #
-# Step 19 fixes that: it subsets the non-promoter SBS96 matrix to ONLY
-# the donor columns that also appear in the canonical PPP-HTG aggregate
-# (~658 donors). Runs the Extractor on that subset. Same compartment
+# Step 19 fixes the cohort confound for BOTH modalities. It subsets the
+# non-promoter SBS96 / ID83 matrices to ONLY the donor columns that also
+# appear in the canonical PPP-HTG SBS96 / ID83 aggregates (658 SBS / 347
+# ID donors), then runs the Extractor on each subset. Same compartment
 # difference, same donor pool — isolates the *compartment* effect from
 # the *cohort* effect.
 #
-# Pass criterion: same as step 6 — closest cosine to canonical SBS96-TRC
-# < 0.85. If a TRC-like component re-emerges in the matched cohort,
-# the negative-control argument weakens.
+# Pass criterion: same as step 6 (SBS) and step 21 (ID) — closest cosine
+# to canonical SBS96-TRC / ID83-TRC < 0.85. If a TRC-like component
+# re-emerges in the matched cohort, the negative-control argument weakens
+# in that modality.
+#
+# Resumable. Each modality has its own COSMIC-decomposition existence
+# guard, so re-launching the pipeline picks up just the missing one.
 
-def step19_nonpromoter_htg_donors_extractor():
-    log("Step 19: within-cohort non-promoter SBS96 Extractor "
-        "(non-promoter mutations restricted to PPP-HTG donor cohort)")
-    out_dir   = WORKDIR / "sensitivity" / "pancancer_nonpromoter_htg_donors"
-    out_label = "pancancer_non_promoter_htg_donors"
-    out_path  = out_dir / "maf" / f"{out_label}.{KIND['SBS96']['matrix_ext']}"
-    extractor_out = out_dir / "extractor_SBS96"
+def _step19_run_one(kind: str) -> None:
+    """Run the within-cohort non-promoter Extractor for one modality.
 
-    if cosmic_signatures_path(extractor_out, "SBS96").exists():
-        log(f"  exists: {extractor_out}")
-        report_real_min_silhouette(extractor_out, out_label, "SBS96")
-        report_trc_cosine(extractor_out, out_label, "SBS96")
+    Subsets the pan-cancer non-promoter matrix to the donor cohort that
+    produced canonical PPP-HTG signatures for the given modality (SBS96
+    canonical is 658 donors, ID83 canonical is 347 donors), then runs
+    the Extractor on that within-cohort matrix.
+
+    Resumable — skips work if the COSMIC-decomposed signatures file
+    already exists for this modality.
+    """
+    out_dir       = WORKDIR / "sensitivity" / "pancancer_nonpromoter_htg_donors"
+    out_label     = "pancancer_non_promoter_htg_donors"
+    out_path      = out_dir / "maf" / f"{out_label}.{KIND[kind]['matrix_ext']}"
+    extractor_out = out_dir / f"extractor_{kind}"
+
+    if cosmic_signatures_path(extractor_out, kind).exists():
+        log(f"  [{kind}] exists: {extractor_out}")
+        report_real_min_silhouette(extractor_out, out_label, kind)
+        report_trc_cosine(extractor_out, out_label, kind)
         return
 
-    htg_src     = pancancer_matrix_path("SBS96")
+    htg_src     = pancancer_matrix_path(kind)
     nonprom_src = (WORKDIR / "sensitivity" / "pancancer_nonpromoter" / "maf"
-                   / f"pancancer_non_promoter.{KIND['SBS96']['matrix_ext']}")
+                   / f"pancancer_non_promoter.{KIND[kind]['matrix_ext']}")
     if not htg_src.exists():
-        log(f"  ABORT: canonical PPP-HTG matrix missing: {htg_src}")
+        log(f"  [{kind}] ABORT: canonical PPP-HTG matrix missing: {htg_src}")
         return
     if not nonprom_src.exists():
-        log(f"  ABORT: non-promoter aggregate matrix missing: {nonprom_src}. "
-            f"Has step 6 (or its aggregator) run?")
+        log(f"  [{kind}] ABORT: non-promoter aggregate matrix missing: {nonprom_src}. "
+            f"Has step 6 (SBS) / step 21 (ID) aggregator run?")
         return
 
     if not out_path.exists():
@@ -1661,62 +1675,89 @@ def step19_nonpromoter_htg_donors_extractor():
         nonprom  = pd.read_csv(nonprom_src, sep="\t", index_col=0)
         n_in     = nonprom.shape[1]
         keep     = [c for c in nonprom.columns if c in htg_cols]
-        log(f"  intersect: {len(keep)}/{n_in} non-promoter samples are in PPP-HTG cohort")
+        log(f"  [{kind}] intersect: {len(keep)}/{n_in} non-promoter samples are in PPP-HTG cohort")
         if len(keep) == 0:
-            log(f"  ABORT: zero overlap between non-promoter and PPP-HTG cohorts")
+            log(f"  [{kind}] ABORT: zero overlap between non-promoter and PPP-HTG cohorts")
             return
         nonprom[keep].to_csv(out_path, sep="\t")
-        log(f"  wrote {out_path} ({len(keep)} samples)")
+        log(f"  [{kind}] wrote {out_path} ({len(keep)} samples)")
 
-    _run_sensitivity_extractor(out_path, out_dir, out_label, "SBS96")
+    _run_sensitivity_extractor(out_path, out_dir, out_label, kind)
 
 
-# --- Step 20: Within-cohort CFS SBS96 Extractor ----------------------------
+def step19_nonpromoter_htg_donors_extractor():
+    log("Step 19: within-cohort non-promoter Extractor "
+        "(non-promoter mutations restricted to PPP-HTG donor cohort, SBS96 + ID83)")
+    _step19_run_one("SBS96")
+    _step19_run_one("ID83")
+
+
+# --- Step 20: Within-cohort CFS Extractor (SBS96 + ID83) -------------------
 # Step 7 ran the CFS Extractor on all 17 tumors (1,694 samples) including
 # esophagus, gallbladder, kidney, PNET (no-expression tumors) and
-# mutation-only donors visible after the all-muts switch. Partial result
-# at k=4 (2026-04-29): the closest CFS component is SBS40a-dominated
-# (cos 0.85 to SBS40a alone, cos 0.83 to canonical SBS96-TRC) -- the
-# higher single-COSMIC cos means the component is best explained as
-# SBS40a, not TRC re-emerging. Other k=4 components are clock/dMMR/SBS17b
-# (esophageal-driven).
+# mutation-only donors visible after the all-muts switch. SBS96 result at
+# k=7 (final): no de novo component matches canonical SBS96-TRC; the
+# closest CFS component (SBS40a-dominated) sits at cos 0.83 to SBS96-TRC
+# but cos 0.85 to SBS40a alone — best explained as SBS40a, not TRC
+# re-emerging. ID83 result at k=4 (final via STOPPED.txt): CFS_D matches
+# canonical ID83-TRC at cos 0.876 — above the 0.85 threshold; ID-TRC
+# topography-portable.
 #
-# Step 20 fixes the cohort confound: subset the CFS SBS96 matrix to ONLY
-# the 658 PPP-HTG donor columns (intersection = 657; one breast donor
-# has no CFS row), then rerun the Extractor on that within-cohort matrix.
-# Same compartment difference as step 7, same donor pool as step 4 (PPP-
-# HTG canonical) -- this is the cleanest unified-mechanism test at the
-# spectrum level. Compares "spectrum of CFS mutations in PPP-HTG donors"
-# to "spectrum of PPP-HTG mutations in PPP-HTG donors" (canonical SBS96-
-# TRC).
+# Step 20 fixes the cohort confound for BOTH modalities. It subsets the
+# CFS SBS96 / ID83 matrices to ONLY the donor columns that also appear
+# in the canonical PPP-HTG SBS96 / ID83 aggregates (~658 SBS / ~347 ID
+# donors), then runs the Extractor on each subset. Same compartment
+# difference as step 7, same donor pool as step 4 (canonical PPP-HTG) —
+# the cleanest unified-mechanism test at the spectrum level. Compares
+# "spectrum of CFS mutations in PPP-HTG donors" to "spectrum of PPP-HTG
+# mutations in PPP-HTG donors" (canonical SBS96-TRC / ID83-TRC).
 #
-# Pass criterion: closest cosine of any de novo component to canonical
-# SBS96-TRC > 0.85 AND that cosine exceeds the closest single-COSMIC
-# match for the same component (so it's not just SBS40a-driven). If
-# both hold, the unified-mechanism claim is supported at spectrum level.
+# Pass criterion (per modality): closest cosine of any de novo component
+# to canonical SBS96-TRC / ID83-TRC > 0.85 AND that cosine exceeds the
+# closest single-COSMIC match for the same component (so it's not just
+# SBS40a- or ID8-driven). If both hold, the unified-mechanism claim is
+# supported at spectrum level for that modality.
+#
+# Resumable. Each modality has its own COSMIC-decomposition existence
+# guard.
 
 def step20_cfs_htg_donors_extractor():
-    log("Step 20: within-cohort CFS SBS96 Extractor "
-        "(CFS mutations restricted to PPP-HTG donor cohort)")
-    out_dir   = WORKDIR / "sensitivity" / "pancancer_cfs_htg_donors"
-    out_label = "pancancer_cfs_htg_donors"
-    out_path  = out_dir / "maf" / f"{out_label}.{KIND['SBS96']['matrix_ext']}"
-    extractor_out = out_dir / "extractor_SBS96"
+    log("Step 20: within-cohort CFS Extractor "
+        "(CFS mutations restricted to PPP-HTG donor cohort, SBS96 + ID83)")
+    _step20_run_one("SBS96")
+    _step20_run_one("ID83")
 
-    if cosmic_signatures_path(extractor_out, "SBS96").exists():
-        log(f"  exists: {extractor_out}")
-        report_real_min_silhouette(extractor_out, out_label, "SBS96")
-        report_trc_cosine(extractor_out, out_label, "SBS96")
+
+def _step20_run_one(kind: str) -> None:
+    """Run the within-cohort CFS Extractor for one modality.
+
+    Subsets the pan-cancer CFS matrix (all 17 tumors / mutation-only
+    donors after the all-muts switch) to the canonical PPP-HTG donor
+    cohort for the given modality (658 SBS, 347 ID), then runs the
+    Extractor on that within-cohort matrix.
+
+    Resumable — skips work if the COSMIC-decomposed signatures file
+    already exists for this modality.
+    """
+    out_dir       = WORKDIR / "sensitivity" / "pancancer_cfs_htg_donors"
+    out_label     = "pancancer_cfs_htg_donors"
+    out_path      = out_dir / "maf" / f"{out_label}.{KIND[kind]['matrix_ext']}"
+    extractor_out = out_dir / f"extractor_{kind}"
+
+    if cosmic_signatures_path(extractor_out, kind).exists():
+        log(f"  [{kind}] exists: {extractor_out}")
+        report_real_min_silhouette(extractor_out, out_label, kind)
+        report_trc_cosine(extractor_out, out_label, kind)
         return
 
-    htg_src = pancancer_matrix_path("SBS96")
+    htg_src = pancancer_matrix_path(kind)
     cfs_src = (WORKDIR / "sensitivity" / "pancancer_cfs" / "maf"
-               / f"pancancer_cfs.{KIND['SBS96']['matrix_ext']}")
+               / f"pancancer_cfs.{KIND[kind]['matrix_ext']}")
     if not htg_src.exists():
-        log(f"  ABORT: canonical PPP-HTG matrix missing: {htg_src}")
+        log(f"  [{kind}] ABORT: canonical PPP-HTG matrix missing: {htg_src}")
         return
     if not cfs_src.exists():
-        log(f"  ABORT: CFS aggregate matrix missing: {cfs_src}. "
+        log(f"  [{kind}] ABORT: CFS aggregate matrix missing: {cfs_src}. "
             f"Has step 7 (or its aggregator) run?")
         return
 
@@ -1726,14 +1767,14 @@ def step20_cfs_htg_donors_extractor():
         cfs      = pd.read_csv(cfs_src, sep="\t", index_col=0)
         n_in     = cfs.shape[1]
         keep     = [c for c in cfs.columns if c in htg_cols]
-        log(f"  intersect: {len(keep)}/{n_in} CFS samples are in PPP-HTG cohort")
+        log(f"  [{kind}] intersect: {len(keep)}/{n_in} CFS samples are in PPP-HTG cohort")
         if len(keep) == 0:
-            log(f"  ABORT: zero overlap between CFS and PPP-HTG cohorts")
+            log(f"  [{kind}] ABORT: zero overlap between CFS and PPP-HTG cohorts")
             return
         cfs[keep].to_csv(out_path, sep="\t")
-        log(f"  wrote {out_path} ({len(keep)} samples)")
+        log(f"  [{kind}] wrote {out_path} ({len(keep)} samples)")
 
-    _run_sensitivity_extractor(out_path, out_dir, out_label, "SBS96")
+    _run_sensitivity_extractor(out_path, out_dir, out_label, kind)
 
 
 # --- Step 21: Pan-cancer non-promoter ID83 Extractor ----------------------
