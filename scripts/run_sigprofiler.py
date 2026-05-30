@@ -137,6 +137,57 @@ PANCANCER_TRC_COLUMN = {
     "ID83":  "ID83B",    # ID83-TRC; ≥5 bp microhomology deletion-dominant.
 }
 
+
+def resolve_trc_column(signatures, kind):
+    """Return the TRC column of a canonical de novo solution, identified
+    by PROFILE rather than by the SigProfiler A/B label, and assert it
+    agrees with PANCANCER_TRC_COLUMN[kind].
+
+    SigProfiler names de novo signatures by descending total mass, so the
+    A/B labels swap whenever TRC and background cross in mass. For SBS96
+    the pan-cancer split is ~50.4/49.6 (a knife's edge), so the label is
+    not a safe identifier across reruns. The profile is unambiguous,
+    though: SBS96-TRC carries ~30% of its mass in C>G channels vs <1% for
+    the background (~30x gap); ID83-TRC carries ~40% in >=5 bp
+    microhomology deletions (Del:M) vs ~3% for the background (~14x gap).
+
+    Picks the TRC column by that profile feature and cross-checks it
+    against the documented constant. They agree as of the 2026.04.27
+    canonical run; if a future rerun swaps the labels they will disagree
+    and this raises loudly, so background is never silently mislabelled
+    as TRC. See the forensic-audit memory
+    project_pancreas_dominance_step9_2026_05_30.md and the label-swap
+    finding in trc_audit_opus48_2026-05-30.md.
+    """
+    if kind == "SBS96":
+        feat_rows = [c for c in signatures.index if c[2:5] == "C>G"]
+        feat_name = "C>G mass"
+    elif kind == "ID83":
+        feat_rows = [c for c in signatures.index if ":Del:M:" in c]
+        feat_name = "Del:M mass"
+    else:
+        raise ValueError(f"resolve_trc_column: unknown kind {kind!r}")
+
+    feat = signatures.loc[feat_rows].sum()
+    by_profile = feat.idxmax()
+    by_label = PANCANCER_TRC_COLUMN[kind]
+
+    if by_label not in signatures.columns:
+        log(f"  [{kind}] resolve_trc_column: documented label {by_label} "
+            f"absent from {list(signatures.columns)}; falling back to the "
+            f"{feat_name}-dominant column {by_profile} "
+            f"({feat_name}={feat[by_profile]:.3f})")
+        return by_profile
+
+    if by_profile != by_label:
+        raise AssertionError(
+            f"[{kind}] TRC label/profile MISMATCH: PANCANCER_TRC_COLUMN"
+            f"[{kind}]={by_label}, but the {feat_name}-dominant column is "
+            f"{by_profile} ({ {c: round(float(feat[c]), 4) for c in feat.index} }). "
+            f"The A/B labels likely swapped on a rerun; update "
+            f"PANCANCER_TRC_COLUMN before proceeding.")
+    return by_label
+
 # Minimal MAF columns understood by SigProfilerMatrixGenerator.
 MAF_COLUMNS = [
     "Hugo_Symbol", "Entrez_Gene_Id", "Center", "NCBI_Build",
@@ -771,11 +822,11 @@ def report_trc_cosine(extractor_out, label, kind):
         log(f"  [{kind}] TRC cosine: channel index mismatch -- skipping")
         return
 
-    trc_col = PANCANCER_TRC_COLUMN[kind]
-    if trc_col not in ref.columns:
-        log(f"  [{kind}] TRC cosine: '{trc_col}' not in canonical ref columns "
-            f"{list(ref.columns)}; PANCANCER_TRC_COLUMN may need updating")
-        return
+    # Identify the canonical TRC column by profile (robust to A/B label
+    # swaps), cross-checked against PANCANCER_TRC_COLUMN. Raises loudly on
+    # a label/profile mismatch rather than silently scoring against
+    # background.
+    trc_col = resolve_trc_column(ref, kind)
 
     log(f"  [{kind}] TRC cosines for {label} (vs canonical pan-cancer):")
     log(f"    {'sens_sig':<14} | " + " | ".join(f"{c:^8}" for c in ref.columns))
