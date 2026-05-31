@@ -114,18 +114,36 @@ producing a corrupted aggregate. Do not weaken this check.
 
 ## Step ordering dependencies
 
-The non-obvious ordering dependency: **step 5 must complete before
-`step_ovary_hrd_exclusion`**.
+Steps are numbered sequentially 1-23 (the renumbering table at the top of
+`docs/SENSITIVITY_RESULTS_2026.md` is canonical). `main()` runs them in a
+**results-first** order, not numeric order: the pan-cancer Extractor and
+Assignment (which feed the figures) run as early as their dependencies
+allow, and the slow / OOM-risky Extractors run last.
 
-`step_ovary_hrd_exclusion` reads the Assignment output for ovary to
-identify donors with SBS3 attribution >50%, removes them, and reruns
-Extractor on the filtered ovary matrix. It cannot run until step 5 has
-produced ovary's per-donor signature attributions.
+Actual `main()` execution order (verified against the script 2026-05-30):
 
-The ordering inside `main()` reflects this: step1 → step2 → step3 →
-step4 (pan-cancer extractor) → step4b (per-tumor extractor) → step5
-(constrained assignment) → step6 (no-hyper sensitivity) →
-step_ovary_hrd_exclusion → step7 (unconstrained sensitivity).
+    1 -> 2 -> 3 -> 4 -> 11 -> 12 -> 22 -> 10 -> 16 -> 17 -> 18 -> 13 ->
+    14 -> 15 -> 5 -> 6 -> 7 -> 19 -> 20 -> 8 -> 9 -> 21 -> 23
+
+Key dependencies that pin this order:
+
+- **step 4 (pan-cancer Extractor) before step 11 (constrained Assignment):**
+  Assignment refits against the step-4-derived COSMIC subset.
+- **step 12 (unconstrained Assignment) before step 14 (MMR/POLE trim):**
+  step 14 reads per-donor MMR/POLE attribution from the unconstrained fit.
+- **step 16 (per-tumor Extractor) before steps 17/18 (ovary HRD exclusion):**
+  the ovary HRD step reads SBS3 from ovary's *per-tumor COSMIC-decomposed
+  Activities* (produced by step 16), NOT from constrained Assignment. An
+  earlier version that read Assignment found 0 SBS3 and excluded no donors;
+  see the bug-history comment in `run_sigprofiler.py` and
+  `docs/PLANNED_SENSITIVITY_STEPS.md`.
+- **step 21 (non-promoter ID83 Extractor) last:** the very sparse
+  non-promoter ID83 matrix has the high-k OOM profile that crashed step 7
+  ID83 on 2026-05-01; running it last means a crash doesn't block earlier
+  results.
+
+The in-code `main()` is authoritative; if it and this note ever disagree,
+trust `main()`.
 
 ## Adding a new analysis step
 
