@@ -334,6 +334,29 @@ def indel_maf_path(project):
     return WORKDIR / "maf" / project / f"{project}_indel.maf"
 
 
+def _assert_unique_mutation(seen, sample, chrom, start, end, ref, alt, tsv_path):
+    """Dedup guard at the matrix-build boundary (added 2026-06-17).
+
+    Raw ICGC .open SSM rows carry ~5x transcript-annotation expansion; the Java
+    pipeline collapses these to one row per (donor, variant). If that dedup ever
+    regresses (e.g. transcriptAffected added to the Java mutationKey) or a MAF is
+    rebuilt from the raw SSM, the same per-donor variant reappears here and would
+    silently inflate per-donor burden and skew the SBS96 spectrum toward gene-dense
+    (multi-transcript) contexts. A correctly-deduped per-donor TSV has every
+    (donor, chrom, start, end, ref, alt) exactly once, so this can only fire on a
+    regression -- fail the matrix build loudly rather than counting it twice.
+    """
+    key = (sample, chrom, start, end, ref, alt)
+    if key in seen:
+        raise ValueError(
+            f"Dedup regression: duplicate per-donor mutation {key} in {tsv_path}. "
+            f"Input is expected to be Java-deduped (one row per donor-variant); a "
+            f"duplicate means transcript-expansion leaked through or the MAF was "
+            f"built from raw SSM. Refusing to double-count into the matrix."
+        )
+    seen.add(key)
+
+
 def convert_sbs_tsv_to_maf(tsv_path, maf_path):
     """Convert one ICGC SBS TSV to a minimal MAF. Returns row count."""
     with open(tsv_path) as fin, open(maf_path, "w", newline="") as fout:
@@ -343,6 +366,7 @@ def convert_sbs_tsv_to_maf(tsv_path, maf_path):
         ix = {c: i for i, c in enumerate(header)}
         writer.writerow(MAF_COLUMNS)
         n = 0
+        seen = set()
         for row in reader:
             if not row:
                 continue
@@ -354,6 +378,7 @@ def convert_sbs_tsv_to_maf(tsv_path, maf_path):
             sample = row[ix["icgc_donor_id"]]
             start  = row[ix["chromosome_start"]]
             end    = row[ix["chromosome_end"]]
+            _assert_unique_mutation(seen, sample, chrom, start, end, ref, alt, tsv_path)
             writer.writerow([
                 "Unknown", "0", "ICGC", REFERENCE,
                 chrom, start, end, "+",
@@ -389,6 +414,7 @@ def convert_indel_tsv_to_maf(tsv_path, maf_path):
         ix = {c: i for i, c in enumerate(header)}
         writer.writerow(MAF_COLUMNS)
         n = 0
+        seen = set()
         for row in reader:
             if not row:
                 continue
@@ -407,6 +433,7 @@ def convert_indel_tsv_to_maf(tsv_path, maf_path):
             else:
                 # Not an indel (or malformed row); skip.
                 continue
+            _assert_unique_mutation(seen, sample, chrom, start, end, ref, alt, tsv_path)
             writer.writerow([
                 "Unknown", "0", "ICGC", REFERENCE,
                 chrom, start, end, "+",

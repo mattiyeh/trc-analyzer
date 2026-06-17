@@ -232,9 +232,21 @@ public class DataCruncher {
 		// Read in mutations
 		Map<String, Mutation> previousMutations = new HashMap<>();
 
+		// Dedup guard (added 2026-06-17): raw ICGC .open SSM rows carry ~5x
+		// transcript-annotation expansion (one row per affected transcript). The
+		// mutationKey HashMap below collapses these to one Mutation per unique
+		// variant. These counters make the collapse VISIBLE per tumor: if a future
+		// change keys on transcript (or a MAF is rebuilt from raw SSM), the
+		// dedupInputRows / uniqueMutations ratio collapses toward 1.0 and the
+		// per-donor burden silently inflates. Logged after the read loop.
+		long totalRowsRead = 0;
+		long dedupInputRows = 0;
+
 		CSVParser csvParser = openMutationFile(tumorType);
 
 		for (CSVRecord tsvRecord : csvParser) {
+
+			totalRowsRead++;
 
 			String mutationId = tsvRecord.get("icgc_mutation_id");
 			String donorId = tsvRecord.get(Constants.ICGC_DONOR_ID);
@@ -261,7 +273,10 @@ public class DataCruncher {
 			if (!donor.containsSpecimen(specimenId) || !Constants.WGS.equals(sequencingStrategy)) {
 				continue;
 			}
-			
+
+			// Row passed QC + WGS filter and is about to enter the mutationKey dedup.
+			dedupInputRows++;
+
 			// Skip mutation if specimen/sample didn't pass QC in readSpecimensAndSamples
 			//if (!donor.containsSpecimen(specimenId)) {
 			//	continue;
@@ -336,6 +351,25 @@ public class DataCruncher {
 			
 		}
 		csvParser.close();
+
+		// Dedup guard log (added 2026-06-17). uniqueMutations is the counting unit
+		// fed downstream into the SBS96/ID83 matrices. expansionRatio > 1 is expected
+		// (transcript-annotation rows collapsed); a ratio ~1.0 on a tumor known to
+		// have multi-transcript genes signals a silent dedup regression.
+		long uniqueMutations = previousMutations.size();
+		double expansionRatio = uniqueMutations == 0 ? 0.0 : (double) dedupInputRows / uniqueMutations;
+		System.out.println(String.format(
+				"DEDUP [%s]: totalRowsRead=%d, WGS+QC rows entering dedup=%d, uniqueMutations=%d, expansionRatio=%.3f",
+				tumorType, totalRowsRead, dedupInputRows, uniqueMutations, expansionRatio));
+
+		// Hard invariant: dedup can only collapse rows, never create them. If unique
+		// mutations ever exceed the rows that entered the dedup, the mutationKey logic
+		// is broken. Fail loudly rather than silently inflating per-donor burden.
+		if (uniqueMutations > dedupInputRows) {
+			throw new IllegalStateException(String.format(
+					"Dedup invariant violated for %s: uniqueMutations (%d) > dedupInputRows (%d)",
+					tumorType, uniqueMutations, dedupInputRows));
+		}
 	}
 
 	/**
