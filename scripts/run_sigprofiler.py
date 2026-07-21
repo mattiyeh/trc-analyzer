@@ -1274,11 +1274,25 @@ def step13_no_hyper(panc_sbs_matrix, panc_id_matrix):
 
 # --- Step 14 detail: ------------------------------------------------------
 # Drop donors whose *unconstrained* SBS96 Assignment profile is dominated
-# by MMR- or POLE-deficiency signatures, then rerun Extractor. PCAWG-
-# consistent (mechanism-defined) alternative to step 13's count-based
-# mean+2SD cutoff -- which conflates true MMR/POLE hypermutators with
-# high-TRC donors. See docs/PLANNED_SENSITIVITY_STEPS.md section 6b
-# for the full contract.
+# by MMR- or POLE-deficiency signatures, then rerun Extractor. Intended as a
+# mechanism-defined alternative to step 13's count-based mean+2SD cutoff,
+# which conflates true MMR/POLE hypermutators with high-TRC donors.
+# See docs/PLANNED_SENSITIVITY_STEPS.md section 6b for the full contract.
+#
+# CAVEAT (audit 2026-07-21) -- this does NOT select hypermutators, and the
+# earlier "PCAWG-consistent" description of it was wrong. PCAWG defines
+# hypermutation on whole-genome burden. The fraction below is taken over a
+# donor's PPP-HTG mutations only, where the median donor carries ~12. A donor
+# with 3 PPP-HTG mutations, one landing on an MMR channel, scores 0.33 and is
+# dropped. Measured against the canonical 664-donor matrix, the filter removes
+# 129 donors of whom 63 (49%) carry <=10 mutations, and the dropped and kept
+# burden distributions have the SAME median (12 vs 12) -- a genuine
+# hypermutator filter would separate them sharply. Drop rate is 22.0% in the
+# 1-5 mutation bin against 10.8% in the 51-100 bin. Pancreas loses 47 of 140.
+# Read the resulting run as "MMR/POLE-signature-dominated donors removed",
+# not as a hypermutator exclusion, and do not cite step 14's k=1 outcome as
+# evidence about burden outliers until the definition is moved to
+# whole-genome burden (which is what step 15 already does).
 
 # Hypermutator-defining SBS signatures (COSMIC v3.5).
 MMR_SIGS  = ["SBS6", "SBS14", "SBS15", "SBS20", "SBS21", "SBS26", "SBS44"]
