@@ -632,15 +632,23 @@ public class DataCruncher {
 				// Only work with donors that have a specimen that has BOTH (based on discussion
 				// with Raoof on 5/8/2022)
 				
-				// All muts run: Temporarily change to just mutation data to get more mutation data (4/29/2023)
-				//if (!donor.hasMutationData()) {
-				//	continue;
-				//}
-				
-				// Normal run:
-				if (!donor.hasMutationAndExpressionData()) {
+				// All-muts configuration. THIS is what produced the canonical
+				// outputs/java/2026.04.27 run and every result in the manuscript:
+				// 189 pancreas donors with spec_w_both=0 appear in the promoter
+				// outputs, which the narrower filter below would have excluded.
+				// It was previously toggled by hand in a working copy, so the
+				// committed source did not reproduce the published run. Set as the
+				// default 2026-07-21. See docs/AUDIT_2026_07_21.md J1.
+				if (!donor.hasMutationData()) {
 					continue;
 				}
+
+				// Narrower alternative: restrict to donors with a specimen carrying
+				// BOTH mutation and expression data (per Raoof, 2022-05-08). Not used
+				// for any published result.
+				//if (!donor.hasMutationAndExpressionData()) {
+				//	continue;
+				//}
 
 				Set<Mutation> unfilteredMutations = donor.getMutations(MutationRange.UNFILTERED, MutationType.ALL);
 				Set<Mutation> unfilteredSbsMutations = donor.getMutations(MutationRange.UNFILTERED, MutationType.SBS);
